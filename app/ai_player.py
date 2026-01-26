@@ -63,7 +63,29 @@ class AIPlayer:
             if action:
                 return action.to_move_request()
         else:
-            # Default to minimax
+            # --- OPENING BOOK (MINIMAX ONLY) ---
+            # Calculate how many pieces the AI has already played
+            ai_pieces_played = sum(1 for stack in game.board.values() for p in stack if p.color == game.current_turn)
+            
+            # First move: Force Grasshopper
+            if ai_pieces_played == 0:
+                state = GameState(game)
+                legal = self.game_interface.get_legal_actions(state)
+                for a in legal:
+                    if a.action_type == "PLACE" and a.piece_type == PieceType.GRASSHOPPER:
+                        print("AI Opening Book: Playing GRASSHOPPER")
+                        return a.to_move_request()
+            
+            # Second move: Force Queen Bee
+            if ai_pieces_played == 1:
+                state = GameState(game)
+                legal = self.game_interface.get_legal_actions(state)
+                for a in legal:
+                    if a.action_type == "PLACE" and a.piece_type == PieceType.QUEEN:
+                        print("AI Opening Book: Playing QUEEN")
+                        return a.to_move_request()
+            
+            # Default to standard minimax search
             move = self.minimax.get_best_move(game)
             if move:
                 return move

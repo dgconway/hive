@@ -381,8 +381,11 @@ class GameEngine:
         game = self.get_game(game_id)
         if not game or game.status == GameStatus.FINISHED:
             return []
+        
+        occupied = self._get_occupied_hexes(game.board)
+        return self.get_valid_moves_for_piece(game, (q, r), occupied)
 
-        from_hex = (q, r)
+    def get_valid_moves_for_piece(self, game: Game, from_hex: Tuple[int, int], occupied: Set[Tuple[int, int]]) -> List[Tuple[int, int]]:
         key = self._coord_to_key(from_hex)
         
         # 1. Basic Checks
@@ -399,7 +402,6 @@ class GameEngine:
              return []
              
         # 2. One Hive Check (Removal)
-        occupied = self._get_occupied_hexes(game.board)
         stack_height = len(game.board[key])
         
         occupied_after_lift = occupied.copy()
