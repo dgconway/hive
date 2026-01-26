@@ -42,3 +42,6 @@ frontend/error.txt
 # System
 .DS_Store
 Thumbs.db
+
+# checkpoint files 
+neural_guided_mcts/checkpoints
