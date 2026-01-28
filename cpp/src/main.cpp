@@ -2,6 +2,7 @@
 #include "json.hpp"
 #include "game_logic.hpp"
 #include "minimax.hpp"
+#include "benchmark.hpp"
 #include <iostream>
 #include <memory>
 
@@ -175,7 +176,24 @@ void setup_routes(httplib::Server& svr) {
         res.set_content(health.dump(), "application/json");
         res.status = 200;
     });
+    
+    // GET /benchmark - Get benchmark report
+    svr.Get("/benchmark", [](const httplib::Request&, httplib::Response& res) {
+        std::string report = Benchmark::instance().report();
+        json response = {{"report", report}};
+        res.set_content(response.dump(), "application/json");
+        res.status = 200;
+    });
+    
+    // POST /benchmark/reset - Reset benchmark counters
+    svr.Post("/benchmark/reset", [](const httplib::Request&, httplib::Response& res) {
+        Benchmark::instance().reset();
+        json response = {{"status", "reset"}};
+        res.set_content(response.dump(), "application/json");
+        res.status = 200;
+    });
 }
+
 
 int main() {
     std::cout << "=== BUGS Game C++ Backend ===" << std::endl;

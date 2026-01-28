@@ -1,4 +1,5 @@
 #include "game_interface.hpp"
+#include "benchmark.hpp"
 #include <algorithm>
 
 namespace bugs {
