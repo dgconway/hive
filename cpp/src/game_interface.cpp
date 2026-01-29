@@ -17,9 +17,9 @@ MoveRequest Action::to_move_request() const {
 // GameState implementation
 GameState::GameState(const Game& g) : game(g) {
     // Deep copy board
-    for (auto& [key, stack] : game.board) {
-        // Vectors are already copied by default copy constructor
-    }
+    // for (auto& [key, stack] : game.board) {
+    //     // Vectors are already copied by default copy constructor
+    // }
 }
 
 GameState::GameState(const GameState& other) : game(other.game) {}
@@ -50,6 +50,7 @@ GameState GameInterface::get_initial_state() {
 
 std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
     std::vector<Action> actions;
+    actions.reserve(30);
     const Game& game = state.game;
     
     if (game.status == GameStatus::FINISHED) {
@@ -74,7 +75,7 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
         for (const auto& hex_pos : placement_hexes) {
             Action action(ActionType::PLACE, hex_pos);
             action.piece_type = PieceType::QUEEN;
-            actions.push_back(action);
+            actions.emplace_back(action);
         }
     } else {
         // Can place any available piece
@@ -83,7 +84,7 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
                 for (const auto& hex_pos : placement_hexes) {
                     Action action(ActionType::PLACE, hex_pos);
                     action.piece_type = piece_type;
-                    actions.push_back(action);
+                    actions.emplace_back(action);
                 }
             }
         }
@@ -95,7 +96,7 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
                 for (const auto& to_hex : destinations) {
                     Action action(ActionType::MOVE, to_hex);
                     action.from_hex = from_hex;
-                    actions.push_back(action);
+                    actions.emplace_back(action);
                 }
             }
         }
@@ -106,6 +107,7 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
 
 std::vector<Hex> GameInterface::get_valid_placement_hexes(const Game& game) {
     std::vector<Hex> valid_hexes;
+    valid_hexes.reserve(30);
     
     // First move: place at origin
     if (game.board.empty()) {
@@ -184,7 +186,7 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
         auto valid_destinations = engine_.get_valid_moves(game.game_id, pos.first, pos.second);
         
         if (!valid_destinations.empty()) {
-            moves.push_back({pos, valid_destinations});
+            moves.emplace_back(pos, valid_destinations);
         }
     }
     

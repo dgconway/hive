@@ -97,7 +97,7 @@ void setup_routes(httplib::Server& svr) {
             // Convert to JSON array of arrays
             json moves_json = json::array();
             for (const auto& move : moves) {
-                moves_json.push_back(json::array({move.first, move.second}));
+                moves_json.emplace_back(json::array({move.first, move.second}));
             }
             
             res.set_content(moves_json.dump(), "application/json");

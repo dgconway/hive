@@ -30,7 +30,7 @@ Hex add_hex(const Hex& a, const Hex& b);
 Hex subtract_hex(const Hex& a, const Hex& b);
 
 // Hex operations
-std::vector<Hex> get_neighbors(const Hex& hex);
+std::array<Hex, 6> get_neighbors(const Hex& hex);
 int hex_distance(const Hex& a, const Hex& b);
 bool are_neighbors(const Hex& a, const Hex& b);
 std::vector<Hex> get_common_neighbors(const Hex& a, const Hex& b);

@@ -14,11 +14,10 @@ Hex subtract_hex(const Hex& a, const Hex& b) {
     return {a.first - b.first, a.second - b.second};
 }
 
-std::vector<Hex> get_neighbors(const Hex& hex) {
-    std::vector<Hex> neighbors;
-    neighbors.reserve(6);
-    for (const auto& dir : HEX_DIRECTIONS) {
-        neighbors.push_back(add_hex(hex, dir));
+std::array<Hex, 6> get_neighbors(const Hex& hex) {
+    std::array<Hex, 6> neighbors;
+    for (int i = 0; i < 6; ++i) {
+        neighbors[i] = add_hex(hex, HEX_DIRECTIONS[i]);
     }
     return neighbors;
 }

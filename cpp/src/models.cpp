@@ -185,7 +185,7 @@ void from_json(const nlohmann::json& j, Game& game) {
     for (auto& [key, stack_json] : j.at("board").items()) {
         std::vector<Piece> stack;
         for (auto& piece_json : stack_json) {
-            stack.push_back(piece_json.get<Piece>());
+            stack.emplace_back(piece_json.get<Piece>());
         }
         game.board[key] = stack;
     }

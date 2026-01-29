@@ -636,7 +636,7 @@ void GameEngine::check_win_condition(Game& game) {
     for (const auto& [key, stack] : game.board) {
         for (const auto& p : stack) {
             if (p.type == PieceType::QUEEN) {
-                queens.push_back({p, key_to_coord(key)});
+                queens.emplace_back(p, key_to_coord(key));
             }
         }
     }
