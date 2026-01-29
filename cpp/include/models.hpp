@@ -66,6 +66,13 @@ struct MoveRequest {
         : action(a), to_hex(to) {}
 };
 
+struct MoveLog {
+    MoveRequest move;
+    PlayerColor player;
+    int turn_number;
+    std::string notation; // For algebraic notation (e.g., "wQ", "wA1 /q,r")
+};
+
 struct Game {
     std::string game_id;
     // Key is "q,r", Value is stack of pieces (bottom to top)
@@ -76,6 +83,7 @@ struct Game {
     std::unordered_map<PieceType, int> black_pieces_hand;
     std::optional<PlayerColor> winner;
     GameStatus status;
+    std::vector<MoveLog> history;
 
     Game() : current_turn(PlayerColor::WHITE), turn_number(1), 
              status(GameStatus::IN_PROGRESS) {}
@@ -99,6 +107,9 @@ void from_json(const nlohmann::json& j, Piece& piece);
 
 void to_json(nlohmann::json& j, const MoveRequest& move);
 void from_json(const nlohmann::json& j, MoveRequest& move);
+
+void to_json(nlohmann::json& j, const MoveLog& log);
+void from_json(const nlohmann::json& j, MoveLog& log);
 
 void to_json(nlohmann::json& j, const Game& game);
 void from_json(const nlohmann::json& j, Game& game);

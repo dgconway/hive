@@ -139,6 +139,24 @@ void from_json(const nlohmann::json& j, MoveRequest& move) {
     }
 }
 
+void to_json(nlohmann::json& j, const MoveLog& log) {
+    j = nlohmann::json{
+        {"move", log.move},
+        {"player", log.player},
+        {"turn_number", log.turn_number},
+        {"notation", log.notation}
+    };
+}
+
+void from_json(const nlohmann::json& j, MoveLog& log) {
+    j.at("move").get_to(log.move);
+    j.at("player").get_to(log.player);
+    j.at("turn_number").get_to(log.turn_number);
+    if (j.contains("notation")) {
+        j.at("notation").get_to(log.notation);
+    }
+}
+
 void to_json(nlohmann::json& j, const Game& game) {
     // Convert board map to JSON
     nlohmann::json board_json = nlohmann::json::object();
@@ -164,7 +182,8 @@ void to_json(nlohmann::json& j, const Game& game) {
         {"turn_number", game.turn_number},
         {"white_pieces_hand", white_hand},
         {"black_pieces_hand", black_hand},
-        {"status", game.status}
+        {"status", game.status},
+        {"history", game.history}
     };
     
     if (game.winner.has_value()) {
@@ -199,6 +218,13 @@ void from_json(const nlohmann::json& j, Game& game) {
     game.black_pieces_hand.clear();
     for (auto& [type_str, count] : j.at("black_pieces_hand").items()) {
         game.black_pieces_hand[piece_type_from_string(type_str)] = count.get<int>();
+    }
+
+    // Parse history
+    if (j.contains("history")) {
+        game.history = j.at("history").get<std::vector<MoveLog>>();
+    } else {
+        game.history.clear();
     }
     
     // Parse winner

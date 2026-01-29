@@ -68,11 +68,29 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     
     validate_turn(game, move);
     
+    // Create log entry
+    MoveLog log;
+    log.move = move;
+    log.player = game.current_turn;
+    log.turn_number = game.turn_number;
+    
+    // Fill in piece type for moves if missing (for the log)
+    if (move.action == ActionType::MOVE && !log.move.piece_type.has_value()) {
+        if (move.from_hex.has_value()) {
+            std::string from_key = coord_to_key(move.from_hex.value());
+            if (game.board.count(from_key) && !game.board[from_key].empty()) {
+                log.move.piece_type = game.board[from_key].back().type;
+            }
+        }
+    }
+    
     if (move.action == ActionType::PLACE) {
         execute_place(game, move);
     } else {
         execute_move(game, move);
     }
+    
+    game.history.push_back(log);
     
     check_win_condition(game);
     
