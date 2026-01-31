@@ -4,6 +4,9 @@
 #include <chrono>
 #include <omp.h>
 #include <mutex>
+#include "minimax.hpp"
+#include "zobrist.hpp"
+#include "benchmark.hpp"
 
 namespace bugs {
 
@@ -91,15 +94,26 @@ bool MinimaxAI::is_killer_move(const Action& action, int ply) const {
 }
 
 void MinimaxAI::update_killer_move(const Action& action, int ply) {
-    if (ply >= MAX_DEPTH) return;
     // Don't store captures as killers (they have their own ordering)
-    if (action.action_type != ActionType::MOVE) return;
-    
-    std::lock_guard<std::mutex> lock(minmax_mutex_);
     // Shift killer moves and insert new one
-    killer_moves_[ply][1] = killer_moves_[ply][0];
-    killer_moves_[ply][0] = action;
+    if (ply < MAX_DEPTH && action.action_type == ActionType::MOVE) {
+        std::lock_guard<std::mutex> lock(minmax_mutex_);
+        killer_moves_[ply][1] = killer_moves_[ply][0];
+        killer_moves_[ply][0] = action;
+    }
 }
+
+
+// void MinimaxAI::update_killer_move(const Action& action, int ply) {
+//     if (ply >= MAX_DEPTH) return;
+//     // Don't store captures as killers (they have their own ordering)
+//     if (action.action_type != ActionType::MOVE) return;
+    
+//     std::lock_guard<std::mutex> lock(minmax_mutex_);
+//     // Shift killer moves and insert new one
+//     killer_moves_[ply][1] = killer_moves_[ply][0];
+//     killer_moves_[ply][0] = action;
+// }
 
 void MinimaxAI::update_history_score(const Action& action, int depth) {
     uint64_t hash = action_hash(action);
@@ -148,61 +162,7 @@ float MinimaxAI::score_action(const Action& action, const GameState& state, Play
     return score;
 }
 
-void MinimaxAI::update_killer_move(const Action& action, int ply) {
-    if (ply >= MAX_DEPTH) return;
-    // Don't store captures as killers (they have their own ordering)
-    if (action.action_type != ActionType::MOVE) return;
-    
-    // Shift killer moves and insert new one
-    killer_moves_[ply][1] = killer_moves_[ply][0];
-    killer_moves_[ply][0] = action;
-}
 
-void MinimaxAI::update_history_score(const Action& action, int depth) {
-    uint64_t hash = action_hash(action);
-    history_scores_[hash] += depth * depth;  // Deeper moves get more weight
-}
-
-float MinimaxAI::score_action(const Action& action, const GameState& state, PlayerColor player, int ply) {
-    float score = 0.0f;
-    
-    // TT best move gets highest priority (handled separately in move ordering)
-    
-    // Killer moves get high priority
-    if (is_killer_move(action, ply)) {
-        score += 5000.0f;
-    }
-    
-    // History heuristic
-    auto hist_it = history_scores_.find(action_hash(action));
-    if (hist_it != history_scores_.end()) {
-        score += std::min(hist_it->second * 0.1f, 1000.0f);
-    }
-    
-    if (action.action_type == ActionType::PLACE) {
-        if (action.piece_type == PieceType::QUEEN) score += 2000.0f;
-        
-        // Discourage Ants in early game - they get trapped easily
-        if (action.piece_type == PieceType::ANT) {
-            if (state.game.turn_number >= 6) {
-                score += 40.0f;
-            } else {
-                score += 5.0f;
-            }
-        }
-        
-        if (action.piece_type == PieceType::GRASSHOPPER) score += 30.0f;
-        if (action.piece_type == PieceType::BEETLE) score += 25.0f;
-        if (action.piece_type == PieceType::SPIDER) score += 15.0f;
-    } else if (action.action_type == ActionType::MOVE) {
-        score += 50.0f;
-        
-        // Bonus for moves that attack opponent queen
-        // (would need queen position to implement fully)
-    }
-    
-    return score;
-}
 
 std::optional<MoveRequest> MinimaxAI::get_best_move(const Game& game) {
     BENCHMARK_SCOPE("get_best_move");
@@ -289,7 +249,7 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
         // Move ordering: PV first, then others
         // We use score_action which uses killer/history/heuristics
         std::sort(legal_actions.begin(), legal_actions.end(),
-            [this, &state, player, &best_action](const Action& a, const Action& b) {
+            [this, &state, player, &best_action](const Action& a, const Action& b) -> bool {
                 // If we have a best action from previous iteration, prioritize it
                 bool a_is_best = best_action.has_value() && 
                     a.action_type == best_action->action_type &&
