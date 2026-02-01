@@ -1,11 +1,10 @@
-#include "evaluator.hpp"
-#include "game_logic.hpp"
+#include "tunable_evaluator.hpp"
 #include <cmath>
 #include <algorithm>
 
 namespace bugs {
 
-float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
+float TunableEvaluator::evaluate(const Game& game, PlayerColor player, GameEngine& engine) const {
     if (game.status == GameStatus::FINISHED) {
         if (game.winner == player) {
             return 1000000.0f;
@@ -16,7 +15,6 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         }
     }
     
-    PlayerColor opponent = (player == PlayerColor::WHITE) ? PlayerColor::BLACK : PlayerColor::WHITE;
     float score = 0.0f;
     
     // Pre-calculate occupied hexes and queen positions
@@ -49,7 +47,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
             }
         }
         const float surround_bonus[] = {0, 5, 15, 40, 100, 300, 1000};
-        score += surround_bonus[occupied_opp_neighbors] * 2.0f;
+        score += surround_bonus[occupied_opp_neighbors] * weights_.surround_opponent_multiplier;
     }
     
     if (player_queen_pos.has_value()) {
@@ -61,7 +59,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
             }
         }
         const float surround_penalty[] = {0, 5, 15, 40, 100, 300, 1000};
-        score -= surround_penalty[occupied_play_neighbors] * 5.0f;
+        score -= surround_penalty[occupied_play_neighbors] * weights_.surround_self_multiplier;
     }
     
     // Material and mobility
@@ -83,11 +81,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         Hex pos = key_to_coord(key);
         
         // Material value
-        float val = 0.0f;
-        auto it = PIECE_VALUES.find(top_piece.type);
-        if (it != PIECE_VALUES.end()) {
-            val = it->second;
-        }
+        float val = weights_.get_piece_value(top_piece.type);
         if (top_piece.color == player) {
             score += val;
         } else {
@@ -102,14 +96,14 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         } catch (...) {
             moves.clear();
         }
-        int num_moves = moves.size();
+        int num_moves = static_cast<int>(moves.size());
         
         if (top_piece.color == player) {
             player_mobility += num_moves;
             if (opponent_queen_pos.has_value()) {
                 int dist = hex_distance(pos, opponent_queen_pos.value());
-                if (dist <= 3) {
-                    score += (5 - dist) * 10.0f;
+                if (dist <= static_cast<int>(weights_.proximity_max_distance)) {
+                    score += (weights_.proximity_max_distance + 2 - dist) * weights_.proximity_weight;
                 }
             }
             if (top_piece.type == PieceType::ANT) {
@@ -120,18 +114,17 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
                     }
                 }
                 if (non_surrounding_moves >= 3) {
-                    score += 20.0f;
+                    score += weights_.ant_freedom_bonus;
                 }
                 
-                // Penalty for trapped ants not surrounding opponent queen
                 if (moves.empty() && !opponent_queen_neighbors_set.count(pos)) {
-                    score -= 15.0f;
+                    score -= weights_.ant_trapped_penalty;
                 }
             }
         } else {
             opponent_mobility += num_moves;
             if (top_piece.type == PieceType::ANT && num_moves == 0) {
-                score += 30.0f;
+                score += weights_.trapped_opponent_ant_bonus;
             }
         }
     }
@@ -141,11 +134,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
     
     // Hand material weighting
     for (const auto& [ptype, count] : game.white_pieces_hand) {
-        float val = 0.0f;
-        auto it = PIECE_VALUES.find(ptype);
-        if (it != PIECE_VALUES.end()) {
-            val = it->second * 0.5f * count;
-        }
+        float val = weights_.get_piece_value(ptype) * weights_.hand_piece_multiplier * count;
         if (player == PlayerColor::WHITE) {
             score += val;
         } else {
@@ -154,11 +143,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
     }
     
     for (const auto& [ptype, count] : game.black_pieces_hand) {
-        float val = 0.0f;
-        auto it = PIECE_VALUES.find(ptype);
-        if (it != PIECE_VALUES.end()) {
-            val = it->second * 0.5f * count;
-        }
+        float val = weights_.get_piece_value(ptype) * weights_.hand_piece_multiplier * count;
         if (player == PlayerColor::BLACK) {
             score += val;
         } else {
@@ -166,7 +151,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         }
     }
     
-    score += (player_mobility - opponent_mobility) * 2.0f;
+    score += (player_mobility - opponent_mobility) * weights_.mobility_weight;
     return score;
 }
 

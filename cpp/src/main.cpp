@@ -3,6 +3,8 @@
 #include "game_logic.hpp"
 #include "minimax.hpp"
 #include "benchmark.hpp"
+#include "weight_optimizer.hpp"
+#include "tunable_evaluator.hpp"
 #include <iostream>
 #include <memory>
 
@@ -12,6 +14,8 @@ using json = nlohmann::json;
 // Global game engine and AI
 std::unique_ptr<GameEngine> g_engine;
 std::unique_ptr<MinimaxAI> g_minimax_ai;
+std::unique_ptr<WeightOptimizer> g_optimizer;
+EvalWeights g_current_weights;
 
 void setup_routes(httplib::Server& svr) {
     // POST /games - Create new game
@@ -192,6 +196,123 @@ void setup_routes(httplib::Server& svr) {
         res.set_content(response.dump(), "application/json");
         res.status = 200;
     });
+    
+    // ========== TRAINING ENDPOINTS ==========
+    
+    // POST /training/start - Start training
+    svr.Post("/training/start", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            if (g_optimizer->is_running()) {
+                json error = {{"error", "Training already running"}};
+                res.set_content(error.dump(), "application/json");
+                res.status = 400;
+                return;
+            }
+            
+            // Parse optional config from request body
+            OptimizerConfig config;
+            if (!req.body.empty()) {
+                json body = json::parse(req.body);
+                if (body.contains("population_size")) config.population_size = body["population_size"];
+                if (body.contains("generations")) config.generations = body["generations"];
+                if (body.contains("games_per_evaluation")) config.games_per_evaluation = body["games_per_evaluation"];
+                if (body.contains("ai_depth")) config.ai_depth = body["ai_depth"];
+                if (body.contains("mutation_rate")) config.mutation_rate = body["mutation_rate"];
+            }
+            
+            g_optimizer = std::make_unique<WeightOptimizer>(config);
+            g_optimizer->set_initial_weights(g_current_weights);
+            g_optimizer->start_training_async();
+            
+            json response = {{"status", "started"}, {"config", {
+                {"population_size", config.population_size},
+                {"generations", config.generations},
+                {"games_per_evaluation", config.games_per_evaluation},
+                {"ai_depth", config.ai_depth}
+            }}};
+            res.set_content(response.dump(), "application/json");
+            res.status = 200;
+        } catch (const std::exception& e) {
+            json error = {{"error", e.what()}};
+            res.set_content(error.dump(), "application/json");
+            res.status = 500;
+        }
+    });
+    
+    // GET /training/status - Get training status
+    svr.Get("/training/status", [](const httplib::Request&, httplib::Response& res) {
+        TrainingStats stats = g_optimizer->get_stats();
+        json response = {
+            {"is_running", stats.is_running},
+            {"current_generation", stats.current_generation},
+            {"total_generations", stats.total_generations},
+            {"games_played", stats.games_played},
+            {"best_fitness", stats.best_fitness},
+            {"average_fitness", stats.average_fitness},
+            {"status_message", stats.status_message}
+        };
+        res.set_content(response.dump(), "application/json");
+        res.status = 200;
+    });
+    
+    // POST /training/stop - Stop training
+    svr.Post("/training/stop", [](const httplib::Request&, httplib::Response& res) {
+        g_optimizer->stop();
+        json response = {{"status", "stopping"}};
+        res.set_content(response.dump(), "application/json");
+        res.status = 200;
+    });
+    
+    // GET /weights - Get current weights
+    svr.Get("/weights", [](const httplib::Request&, httplib::Response& res) {
+        json response = g_current_weights.to_json();
+        res.set_content(response.dump(), "application/json");
+        res.status = 200;
+    });
+    
+    // POST /weights - Set weights
+    svr.Post("/weights", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            json body = json::parse(req.body);
+            g_current_weights = EvalWeights::from_json(body);
+            g_current_weights.save_to_file("weights.json");
+            json response = {{"status", "updated"}, {"weights", g_current_weights.to_json()}};
+            res.set_content(response.dump(), "application/json");
+            res.status = 200;
+        } catch (const std::exception& e) {
+            json error = {{"error", e.what()}};
+            res.set_content(error.dump(), "application/json");
+            res.status = 400;
+        }
+    });
+    
+    // POST /training/quick - Run quick self-play test (1 game)
+    svr.Post("/training/quick", [](const httplib::Request&, httplib::Response& res) {
+        try {
+            SelfPlayConfig config;
+            config.ai_depth = 2;
+            config.max_moves = 100;
+            config.verbose = true;
+            
+            SelfPlayEngine engine(config);
+            GameResult result = engine.run_game(g_current_weights, g_current_weights);
+            
+            std::string winner_str = result.was_draw ? "draw" : 
+                (result.winner.has_value() ? to_string(result.winner.value()) : "unknown");
+            
+            json response = {
+                {"winner", winner_str},
+                {"total_moves", result.total_moves},
+                {"was_draw", result.was_draw}
+            };
+            res.set_content(response.dump(), "application/json");
+            res.status = 200;
+        } catch (const std::exception& e) {
+            json error = {{"error", e.what()}};
+            res.set_content(error.dump(), "application/json");
+            res.status = 500;
+        }
+    });
 }
 
 
@@ -202,6 +323,10 @@ int main() {
     // Initialize global instances
     g_engine = std::make_unique<GameEngine>();
     g_minimax_ai = std::make_unique<MinimaxAI>(4); // Depth 4
+    g_optimizer = std::make_unique<WeightOptimizer>();
+    
+    // Load weights if exists
+    g_current_weights = EvalWeights::load_from_file("weights.json");
     
     httplib::Server svr;
     

@@ -10,6 +10,7 @@
 #include <memory>
 #include <array>
 #include <cstdint>
+#include <mutex>
 
 namespace bugs {
 
@@ -46,6 +47,7 @@ private:
     int depth_;
     GameInterface interface_;
     GameEngine engine_;
+    mutable std::mutex minmax_mutex_;
     
     // Improved transposition table using Zobrist hash
     std::unordered_map<uint64_t, TTEntry> transposition_table_;
@@ -57,9 +59,9 @@ private:
     std::unordered_map<uint64_t, int> history_scores_;
     
     // Search statistics
-    int64_t nodes_searched_ = 0;
-    int64_t tt_hits_ = 0;
-    int64_t tt_cutoffs_ = 0;
+    std::atomic<int64_t> nodes_searched_ = 0;
+    std::atomic<int64_t> tt_hits_ = 0;
+    std::atomic<int64_t> tt_cutoffs_ = 0;
     
     // Legacy string-based key (kept for compatibility)
     std::string get_state_key(const GameState& state);
@@ -81,7 +83,8 @@ private:
         float beta,
         bool is_maximizing,
         PlayerColor player,
-        int ply  // Current ply from root
+        int ply,
+        GameInterface& game_interface
     );
     
     // Move ordering

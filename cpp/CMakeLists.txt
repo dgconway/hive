@@ -21,6 +21,9 @@ set(SOURCES
     src/game_interface.cpp
     src/evaluator.cpp
     src/minimax.cpp
+    src/tunable_evaluator.cpp
+    src/self_play.cpp
+    src/weight_optimizer.cpp
     src/main.cpp
 )
 
