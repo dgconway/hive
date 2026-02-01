@@ -10,10 +10,10 @@ namespace bugs {
 namespace {
     // UUID generation helper
     std::string generate_uuid() {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<> dis(0, 15);
-        static std::uniform_int_distribution<> dis2(8, 11);
+        thread_local static std::random_device rd;
+        thread_local static std::mt19937 gen(rd());
+        thread_local static std::uniform_int_distribution<> dis(0, 15);
+        thread_local static std::uniform_int_distribution<> dis2(8, 11);
         
         std::stringstream ss;
         int i;

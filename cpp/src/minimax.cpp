@@ -4,6 +4,7 @@
 #include <chrono>
 #include <omp.h>
 #include <mutex>
+#include <stdexcept>
 #include "minimax.hpp"
 #include "zobrist.hpp"
 #include "benchmark.hpp"
@@ -275,7 +276,7 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
         // 1. Search PV move serially
         {
             GameState new_state = interface_.apply_action(state, legal_actions[0]);
-            auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1);
+            auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1, interface_);
             if (val > iteration_best_score) {
                 iteration_best_score = val;
                 iteration_best_action = legal_actions[0];
@@ -295,10 +296,21 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
 
         #pragma omp parallel for schedule(dynamic)
         for (int i = 1; i < (int)legal_actions.size(); ++i) {
-            GameState new_state = interface_.apply_action(state, legal_actions[i]);
-            // Use current_iter_alpha as lower bound, but valid window is still important
-            auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1);
-            parallel_results[i] = {val, legal_actions[i]};
+            try {
+                // Thread-local interface to avoid race conditions on GameEngine
+                GameInterface local_interface;
+                GameState new_state = local_interface.apply_action(state, legal_actions[i]);
+                // Use current_iter_alpha as lower bound, but valid window is still important
+                auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1, local_interface);
+                parallel_results[i] = {val, legal_actions[i]};
+            } catch (const std::exception& e) {
+                std::cerr << "Minimax Error (Thread " << omp_get_thread_num() << "): " << e.what() << std::endl;
+                // Return worst possible score for this branch
+                parallel_results[i] = {-std::numeric_limits<float>::infinity(), legal_actions[i]};
+            } catch (...) {
+                std::cerr << "Minimax Unknown Error (Thread " << omp_get_thread_num() << ")" << std::endl;
+                parallel_results[i] = {-std::numeric_limits<float>::infinity(), legal_actions[i]};
+            }
         }
         
         // 3. Collect results
@@ -329,7 +341,8 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     float beta,
     bool is_maximizing,
     PlayerColor player,
-    int ply) {
+    int ply,
+    GameInterface& game_interface) {
     
     BENCHMARK_SCOPE_DEBUG("minimax");
     nodes_searched_++;
@@ -364,7 +377,7 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     // Terminal or depth limit
     if (depth == 0 || state.is_terminal()) {
         BENCHMARK_SCOPE("evaluate_state");
-        float score = evaluate_state(state.game, player, engine_);
+        float score = evaluate_state(state.game, player, game_interface.get_engine());
         
         // Store in TT
         std::lock_guard<std::mutex> lock(minmax_mutex_);
@@ -381,11 +394,11 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     std::vector<Action> legal_actions;
     {
         BENCHMARK_SCOPE("get_legal_actions");
-        legal_actions = interface_.get_legal_actions(state);
+        legal_actions = game_interface.get_legal_actions(state);
     }
     
     if (legal_actions.empty()) {
-        float score = evaluate_state(state.game, player, engine_);
+        float score = evaluate_state(state.game, player, game_interface.get_engine());
         return {score, std::nullopt};
     }
     
@@ -426,8 +439,8 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     if (is_maximizing) {
         float curr_max = -std::numeric_limits<float>::infinity();
         for (const auto& action : legal_actions) {
-            GameState new_state = interface_.apply_action(state, action);
-            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, false, player, ply + 1);
+            GameState new_state = game_interface.apply_action(state, action);
+            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, false, player, ply + 1, game_interface);
             
             if (eval_val > curr_max) {
                 curr_max = eval_val;
@@ -463,8 +476,8 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     } else {
         float curr_min = std::numeric_limits<float>::infinity();
         for (const auto& action : legal_actions) {
-            GameState new_state = interface_.apply_action(state, action);
-            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, true, player, ply + 1);
+            GameState new_state = game_interface.apply_action(state, action);
+            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, true, player, ply + 1, game_interface);
             
             if (eval_val < curr_min) {
                 curr_min = eval_val;

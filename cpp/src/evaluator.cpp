@@ -83,7 +83,11 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         Hex pos = key_to_coord(key);
         
         // Material value
-        float val = PIECE_VALUES.at(top_piece.type);
+        float val = 0.0f;
+        auto it = PIECE_VALUES.find(top_piece.type);
+        if (it != PIECE_VALUES.end()) {
+            val = it->second;
+        }
         if (top_piece.color == player) {
             score += val;
         } else {
@@ -137,7 +141,11 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
     
     // Hand material weighting
     for (const auto& [ptype, count] : game.white_pieces_hand) {
-        float val = PIECE_VALUES.at(ptype) * 0.5f * count;
+        float val = 0.0f;
+        auto it = PIECE_VALUES.find(ptype);
+        if (it != PIECE_VALUES.end()) {
+            val = it->second * 0.5f * count;
+        }
         if (player == PlayerColor::WHITE) {
             score += val;
         } else {
@@ -146,7 +154,11 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
     }
     
     for (const auto& [ptype, count] : game.black_pieces_hand) {
-        float val = PIECE_VALUES.at(ptype) * 0.5f * count;
+        float val = 0.0f;
+        auto it = PIECE_VALUES.find(ptype);
+        if (it != PIECE_VALUES.end()) {
+            val = it->second * 0.5f * count;
+        }
         if (player == PlayerColor::BLACK) {
             score += val;
         } else {

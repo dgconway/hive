@@ -46,6 +46,8 @@ public:
     std::vector<Action> get_legal_actions(const GameState& state);
     GameState apply_action(const GameState& state, const Action& action);
     
+    GameEngine& get_engine() { return engine_; }
+    
 private:
     GameEngine engine_;
     

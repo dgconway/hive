@@ -83,7 +83,8 @@ private:
         float beta,
         bool is_maximizing,
         PlayerColor player,
-        int ply  // Current ply from root
+        int ply,
+        GameInterface& game_interface
     );
     
     // Move ordering

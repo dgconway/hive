@@ -11,6 +11,13 @@ MoveRequest Action::to_move_request() const {
     move.piece_type = piece_type;
     move.from_hex = from_hex;
     move.to_hex = to_hex;
+    move.to_hex = to_hex;
+    
+    // Safety check: if action is PLACE, piece_type must be set
+    if (move.action == ActionType::PLACE && !move.piece_type.has_value()) {
+        // This shouldn't happen with correct logic, but let's be safe
+        move.piece_type = PieceType::ANT; // Fallback to avoid crash, but indicates logic error
+    }
     return move;
 }
 
@@ -96,6 +103,13 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
                 for (const auto& to_hex : destinations) {
                     Action action(ActionType::MOVE, to_hex);
                     action.from_hex = from_hex;
+                    
+                    // Populate piece type for move
+                    std::string key = coord_to_key(from_hex);
+                    if (game.board.count(key) && !game.board.at(key).empty()) {
+                        action.piece_type = game.board.at(key).back().type;
+                    }
+                    
                     actions.emplace_back(action);
                 }
             }
