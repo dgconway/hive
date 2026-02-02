@@ -160,8 +160,8 @@ void from_json(const nlohmann::json& j, MoveLog& log) {
 void to_json(nlohmann::json& j, const Game& game) {
     // Convert board map to JSON
     nlohmann::json board_json = nlohmann::json::object();
-    for (const auto& [key, stack] : game.board) {
-        board_json[key] = stack;
+    for (const auto& [hex, stack] : game.board) {
+        board_json[coord_to_key(hex)] = stack;
     }
     
     // Convert hand maps to JSON
@@ -206,7 +206,7 @@ void from_json(const nlohmann::json& j, Game& game) {
         for (auto& piece_json : stack_json) {
             stack.emplace_back(piece_json.get<Piece>());
         }
-        game.board[key] = stack;
+        game.board[key_to_coord(key)] = stack;
     }
     
     // Parse hands

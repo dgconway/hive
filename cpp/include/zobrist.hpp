@@ -88,9 +88,8 @@ inline uint64_t compute_zobrist_hash(const Game& game) {
     const auto& zobrist = ZobristHash::instance();
 
     // Hash board pieces
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [pos, stack] : game.board) {
         if (stack.empty()) continue;
-        Hex pos = key_to_coord(key);
         for (size_t i = 0; i < stack.size(); ++i) {
             const auto& piece = stack[i];
             hash ^= zobrist.get_piece_hash(piece.type, piece.color, pos);

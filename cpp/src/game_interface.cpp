@@ -105,9 +105,8 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
                     action.from_hex = from_hex;
                     
                     // Populate piece type for move
-                    std::string key = coord_to_key(from_hex);
-                    if (game.board.count(key) && !game.board.at(key).empty()) {
-                        action.piece_type = game.board.at(key).back().type;
+                    if (game.board.count(from_hex) && !game.board.at(from_hex).empty()) {
+                        action.piece_type = game.board.at(from_hex).back().type;
                     }
                     
                     actions.emplace_back(action);
@@ -131,8 +130,8 @@ std::vector<Hex> GameInterface::get_valid_placement_hexes(const Game& game) {
     // Second move: place adjacent to any piece
     if (game.turn_number == 2) {
         std::unordered_set<Hex, HexHash> occupied;
-        for (const auto& [key, stack] : game.board) {
-            occupied.insert(key_to_coord(key));
+        for (const auto& [pos, stack] : game.board) {
+            occupied.insert(pos);
         }
         
         std::unordered_set<Hex, HexHash> candidates;
@@ -148,9 +147,8 @@ std::vector<Hex> GameInterface::get_valid_placement_hexes(const Game& game) {
     
     // General case: touch own, not opponent
     std::unordered_map<Hex, PlayerColor, HexHash> occupied;
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [pos, stack] : game.board) {
         if (!stack.empty()) {
-            Hex pos = key_to_coord(key);
             occupied[pos] = stack.back().color;
         }
     }
@@ -190,13 +188,12 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
     // Temporarily register game
     const_cast<GameEngine&>(engine_).games_[game.game_id] = game;
     
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [pos, stack] : game.board) {
         if (stack.empty()) continue;
         
         const Piece& top_piece = stack.back();
         if (top_piece.color != game.current_turn) continue;
         
-        Hex pos = key_to_coord(key);
         auto valid_destinations = engine_.get_valid_moves(game.game_id, pos.first, pos.second);
         
         if (!valid_destinations.empty()) {

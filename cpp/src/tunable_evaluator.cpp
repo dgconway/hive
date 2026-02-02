@@ -22,9 +22,8 @@ float TunableEvaluator::evaluate(const Game& game, PlayerColor player, GameEngin
     std::optional<Hex> opponent_queen_pos;
     std::unordered_set<Hex, HexHash> occupied_hexes;
     
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [pos, stack] : game.board) {
         if (!stack.empty()) {
-            Hex pos = key_to_coord(key);
             occupied_hexes.insert(pos);
             const Piece& top_piece = stack.back();
             if (top_piece.type == PieceType::QUEEN) {
@@ -75,10 +74,9 @@ float TunableEvaluator::evaluate(const Game& game, PlayerColor player, GameEngin
     PlayerColor original_turn = game.current_turn;
     Game mutable_game = game;
     
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [pos, stack] : game.board) {
         if (stack.empty()) continue;
         const Piece& top_piece = stack.back();
-        Hex pos = key_to_coord(key);
         
         // Material value
         float val = weights_.get_piece_value(top_piece.type);

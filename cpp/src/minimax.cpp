@@ -27,15 +27,19 @@ std::string MinimaxAI::get_state_key(const GameState& state) {
     // Sort board keys for consistent hashing
     std::vector<std::string> sorted_keys;
     sorted_keys.reserve(state.game.board.size());
-    for (const auto& [key, stack] : state.game.board) {
+    for (const auto& [hex, stack] : state.game.board) {
         if (!stack.empty()) {
-            sorted_keys.push_back(key);
+            sorted_keys.push_back(coord_to_key(hex));
         }
     }
     std::sort(sorted_keys.begin(), sorted_keys.end());
     
     for (const auto& key : sorted_keys) {
-        const auto& stack = state.game.board.at(key);
+        // Need to convert key back to hex to access map, OR just rely on logic that key is now string
+        // But map key is Hex. So we need to parse key back to Hex to lookup?
+        // Actually, efficiently we shouldn't do this double conversion.
+        // But since this is legacy code, let's just lookup.
+        const auto& stack = state.game.board.at(key_to_coord(key));
         ss << key << ":";
         for (const auto& p : stack) {
             ss << to_string(p.type)[0] << to_string(p.color)[0];
@@ -178,7 +182,7 @@ std::optional<MoveRequest> MinimaxAI::get_best_move(const Game& game) {
     
     // === OPENING BOOK ===
     int ai_pieces_played = 0;
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [hex, stack] : game.board) {
         for (const auto& piece : stack) {
             if (piece.color == player) {
                 ai_pieces_played++;

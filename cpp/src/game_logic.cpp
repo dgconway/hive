@@ -77,9 +77,9 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     // Fill in piece type for moves if missing (for the log)
     if (move.action == ActionType::MOVE && !log.move.piece_type.has_value()) {
         if (move.from_hex.has_value()) {
-            std::string from_key = coord_to_key(move.from_hex.value());
-            if (game.board.count(from_key) && !game.board[from_key].empty()) {
-                log.move.piece_type = game.board[from_key].back().type;
+            Hex from = move.from_hex.value();
+            if (game.board.count(from) && !game.board.at(from).empty()) {
+                log.move.piece_type = game.board.at(from).back().type;
             }
         }
     }
@@ -135,9 +135,7 @@ void GameEngine::execute_place(Game& game, const MoveRequest& move) {
         throw std::runtime_error("No " + to_string(move.piece_type.value()) + " remaining in hand");
     }
     
-    std::string coord_key = coord_to_key(move.to_hex);
-    
-    if (game.board.count(coord_key) && !game.board[coord_key].empty()) {
+    if (game.board.count(move.to_hex) && !game.board.at(move.to_hex).empty()) {
         throw std::runtime_error("Cannot place on occupied tile");
     }
     
@@ -149,7 +147,7 @@ void GameEngine::execute_place(Game& game, const MoveRequest& move) {
         auto neighbors = get_neighbors(move.to_hex);
         bool has_neighbor = false;
         for (const auto& n : neighbors) {
-            if (game.board.count(coord_to_key(n))) {
+            if (game.board.count(n)) {
                 has_neighbor = true;
                 break;
             }
@@ -164,9 +162,8 @@ void GameEngine::execute_place(Game& game, const MoveRequest& move) {
         bool touching_opponent = false;
         
         for (const auto& n : neighbors) {
-            std::string n_key = coord_to_key(n);
-            if (game.board.count(n_key) && !game.board[n_key].empty()) {
-                const Piece& top_piece = game.board[n_key].back();
+            if (game.board.count(n) && !game.board.at(n).empty()) {
+                const Piece& top_piece = game.board.at(n).back();
                 if (top_piece.color == game.current_turn) {
                     touching_own = true;
                 } else {
@@ -189,7 +186,7 @@ void GameEngine::execute_place(Game& game, const MoveRequest& move) {
     new_piece.color = game.current_turn;
     new_piece.id = generate_uuid();
     
-    game.board[coord_key] = {new_piece};
+    game.board[move.to_hex] = {new_piece};
     hand[move.piece_type.value()]--;
 }
 
@@ -199,21 +196,18 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         throw std::runtime_error("Origin required for move");
     }
     
-    std::string from_key = coord_to_key(move.from_hex.value());
-    std::string to_key = coord_to_key(move.to_hex);
-    
-    if (!game.board.count(from_key) || game.board[from_key].empty()) {
+    if (!game.board.count(move.from_hex.value()) || game.board.at(move.from_hex.value()).empty()) {
         throw std::runtime_error("No piece at origin");
     }
     
-    Piece& piece_to_move = game.board[from_key].back();
+    Piece& piece_to_move = game.board.at(move.from_hex.value()).back();
     
     if (piece_to_move.color != game.current_turn) {
         throw std::runtime_error("Cannot move opponent's piece");
     }
     
     // One Hive Rule
-    size_t stack_height = game.board[from_key].size();
+    size_t stack_height = game.board.at(move.from_hex.value()).size();
     auto occupied = get_occupied_hexes(game.board);
     
     auto future_occupied = occupied;
@@ -259,15 +253,15 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
     }
     
     // Execute move
-    game.board[from_key].pop_back();
-    if (game.board[from_key].empty()) {
-        game.board.erase(from_key);
+    game.board[move.from_hex.value()].pop_back();
+    if (game.board[move.from_hex.value()].empty()) {
+        game.board.erase(move.from_hex.value());
     }
     
-    if (!game.board.count(to_key)) {
-        game.board[to_key] = {};
+    if (!game.board.count(move.to_hex)) {
+        game.board[move.to_hex] = {};
     }
-    game.board[to_key].push_back(piece_to_move);
+    game.board[move.to_hex].push_back(piece_to_move);
 }
 
 // Helper: can_slide
@@ -296,11 +290,11 @@ bool GameEngine::can_slide(const Hex& start, const Hex& end,
 
 // Helper: get occupied hexes
 std::unordered_set<Hex, HexHash> GameEngine::get_occupied_hexes(
-    const std::unordered_map<std::string, std::vector<Piece>>& board) {
+    const std::unordered_map<Hex, std::vector<Piece>, HexHash>& board) {
     std::unordered_set<Hex, HexHash> hexes;
-    for (const auto& [key, stack] : board) {
+    for (const auto& [hex, stack] : board) {
         if (!stack.empty()) {
-            hexes.insert(key_to_coord(key));
+            hexes.insert(hex);
         }
     }
     return hexes;
@@ -319,8 +313,7 @@ bool GameEngine::validate_beetle_move(const Game& game, const Hex& start, const 
                                       const std::unordered_set<Hex, HexHash>& occupied) {
     if (!are_neighbors(start, end)) return false;
     
-    std::string start_key = coord_to_key(start);
-    size_t start_z = game.board.count(start_key) ? game.board.at(start_key).size() : 0;
+    size_t start_z = game.board.count(start) ? game.board.at(start).size() : 0;
     bool is_dest_empty = !occupied.count(end);
     
     if (start_z == 1 && is_dest_empty) {
@@ -466,8 +459,7 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_queen_moves(
 std::unordered_set<Hex, HexHash> GameEngine::gen_beetle_moves(
     const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
     std::unordered_set<Hex, HexHash> moves;
-    std::string start_key = coord_to_key(start);
-    size_t start_z = game.board.count(start_key) ? game.board.at(start_key).size() : 0;
+    size_t start_z = game.board.count(start) ? game.board.at(start).size() : 0;
     
     for (const auto& n : get_neighbors(start)) {
         bool is_dest_empty = !occupied.count(n);
@@ -594,13 +586,11 @@ std::vector<Hex> GameEngine::get_valid_moves(const std::string& game_id, int q, 
 std::vector<Hex> GameEngine::get_valid_moves_for_piece(
     const Game& game, const Hex& from_hex, const std::unordered_set<Hex, HexHash>& occupied) {
     
-    std::string key = coord_to_key(from_hex);
-    
-    if (!game.board.count(key) || game.board.at(key).empty()) {
+    if (!game.board.count(from_hex) || game.board.at(from_hex).empty()) {
         return {};
     }
     
-    const Piece& piece = game.board.at(key).back();
+    const Piece& piece = game.board.at(from_hex).back();
     if (piece.color != game.current_turn) {
         return {};
     }
@@ -613,7 +603,7 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
     }
     
     // One Hive check
-    size_t stack_height = game.board.at(key).size();
+    size_t stack_height = game.board.at(from_hex).size();
     auto occupied_after_lift = occupied;
     if (stack_height == 1) {
         occupied_after_lift.erase(from_hex);
@@ -651,10 +641,10 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
 void GameEngine::check_win_condition(Game& game) {
     std::vector<std::pair<Piece, Hex>> queens;
     
-    for (const auto& [key, stack] : game.board) {
+    for (const auto& [hex, stack] : game.board) {
         for (const auto& p : stack) {
             if (p.type == PieceType::QUEEN) {
-                queens.emplace_back(p, key_to_coord(key));
+                queens.emplace_back(p, hex);
             }
         }
     }
@@ -666,7 +656,7 @@ void GameEngine::check_win_condition(Game& game) {
         auto neighbors = get_neighbors(loc);
         int occupied_count = 0;
         for (const auto& n : neighbors) {
-            if (game.board.count(coord_to_key(n))) {
+            if (game.board.count(n)) {
                 occupied_count++;
             }
         }

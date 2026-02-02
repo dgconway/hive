@@ -6,6 +6,7 @@
 #include <optional>
 #include <memory>
 #include "json.hpp"
+#include "hex_math.hpp"
 
 namespace bugs {
 
@@ -74,9 +75,12 @@ struct MoveLog {
 };
 
 struct Game {
+#include "hex_math.hpp"
+
+// ... (existing includes)
     std::string game_id;
-    // Key is "q,r", Value is stack of pieces (bottom to top)
-    std::unordered_map<std::string, std::vector<Piece>> board;
+    // Key is Hex coordinate, Value is stack of pieces (bottom to top)
+    std::unordered_map<Hex, std::vector<Piece>, HexHash> board;
     PlayerColor current_turn;
     int turn_number;
     std::unordered_map<PieceType, int> white_pieces_hand;

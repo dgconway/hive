@@ -71,7 +71,7 @@ private:
     bool can_slide(const Hex& start, const Hex& end, 
                   const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> get_occupied_hexes(
-        const std::unordered_map<std::string, std::vector<Piece>>& board);
+        const std::unordered_map<Hex, std::vector<Piece>, HexHash>& board);
     void check_win_condition(Game& game);
 };
 
