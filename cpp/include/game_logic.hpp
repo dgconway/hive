@@ -24,6 +24,7 @@ public:
     Game create_game();
     std::optional<Game> get_game(const std::string& game_id);
     Game process_move(const std::string& game_id, const MoveRequest& move);
+    Game process_move_direct(Game game, const MoveRequest& move);
     
     // Move generation
     std::vector<Hex> get_valid_moves(const std::string& game_id, int q, int r);

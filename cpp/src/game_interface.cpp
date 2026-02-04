@@ -185,8 +185,8 @@ std::vector<Hex> GameInterface::get_valid_placement_hexes(const Game& game) {
 std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves(const Game& game) {
     std::vector<std::pair<Hex, std::vector<Hex>>> moves;
     
-    // Temporarily register game
-    const_cast<GameEngine&>(engine_).games_[game.game_id] = game;
+    // Get occupied hexes for move generation
+    auto occupied = engine_.get_occupied_hexes(game.board);
     
     for (const auto& [pos, stack] : game.board) {
         if (stack.empty()) continue;
@@ -194,34 +194,21 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
         const Piece& top_piece = stack.back();
         if (top_piece.color != game.current_turn) continue;
         
-        auto valid_destinations = engine_.get_valid_moves(game.game_id, pos.first, pos.second);
+        // Call get_valid_moves_for_piece directly - no games_ map needed
+        auto valid_destinations = engine_.get_valid_moves_for_piece(game, pos, occupied);
         
         if (!valid_destinations.empty()) {
             moves.emplace_back(pos, valid_destinations);
         }
     }
     
-    // Clean up
-    const_cast<GameEngine&>(engine_).games_.erase(game.game_id);
-    
     return moves;
 }
 
 GameState GameInterface::apply_action(const GameState& state, const Action& action) {
-    GameState new_state(state);
-    
-    // Register game temporarily
-    engine_.games_[new_state.game.game_id] = new_state.game;
-    
-    try {
-        new_state.game = engine_.process_move(new_state.game.game_id, action.to_move_request());
-    } catch (...) {
-        engine_.games_.erase(new_state.game.game_id);
-        throw;
-    }
-    
-    engine_.games_.erase(new_state.game.game_id);
-    return new_state;
+    // Use process_move_direct to avoid games_ map dependency
+    Game new_game = engine_.process_move_direct(state.game, action.to_move_request());
+    return GameState(new_game);
 }
 
 } // namespace bugs

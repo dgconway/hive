@@ -75,9 +75,6 @@ struct MoveLog {
 };
 
 struct Game {
-#include "hex_math.hpp"
-
-// ... (existing includes)
     std::string game_id;
     // Key is Hex coordinate, Value is stack of pieces (bottom to top)
     std::unordered_map<Hex, std::vector<Piece>, HexHash> board;

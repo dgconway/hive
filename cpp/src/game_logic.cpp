@@ -102,6 +102,47 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     return game;
 }
 
+Game GameEngine::process_move_direct(Game game, const MoveRequest& move) {
+    if (game.status == GameStatus::FINISHED) {
+        throw std::runtime_error("Game is finished");
+    }
+    
+    validate_turn(game, move);
+    
+    // Create log entry
+    MoveLog log;
+    log.move = move;
+    log.player = game.current_turn;
+    log.turn_number = game.turn_number;
+    
+    // Fill in piece type for moves if missing (for the log)
+    if (move.action == ActionType::MOVE && !log.move.piece_type.has_value()) {
+        if (move.from_hex.has_value()) {
+            Hex from = move.from_hex.value();
+            if (game.board.count(from) && !game.board.at(from).empty()) {
+                log.move.piece_type = game.board.at(from).back().type;
+            }
+        }
+    }
+    
+    if (move.action == ActionType::PLACE) {
+        execute_place(game, move);
+    } else {
+        execute_move(game, move);
+    }
+    
+    game.history.push_back(log);
+    
+    check_win_condition(game);
+    
+    // Switch turn
+    game.current_turn = (game.current_turn == PlayerColor::WHITE) 
+        ? PlayerColor::BLACK : PlayerColor::WHITE;
+    game.turn_number++;
+    
+    return game;
+}
+
 // Validation
 void GameEngine::validate_turn(const Game& game, const MoveRequest& move) {
     auto& hand = (game.current_turn == PlayerColor::WHITE) 
