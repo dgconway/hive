@@ -16,7 +16,6 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         }
     }
     
-    PlayerColor opponent = (player == PlayerColor::WHITE) ? PlayerColor::BLACK : PlayerColor::WHITE;
     float score = 0.0f;
     
     // Pre-calculate occupied hexes and queen positions
@@ -102,7 +101,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         } catch (...) {
             moves.clear();
         }
-        int num_moves = moves.size();
+        size_t num_moves = moves.size();
         
         if (top_piece.color == player) {
             player_mobility += num_moves;
