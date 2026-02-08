@@ -19,7 +19,7 @@ EvalWeights g_current_weights;
 
 void setup_routes(httplib::Server& svr) {
     // POST /games - Create new game
-    svr.Post("/games", [](const httplib::Request& req, httplib::Response& res) {
+    svr.Post("/games", [](const httplib::Request&, httplib::Response& res) {
         try {
             Game game = g_engine->create_game();
             json j = game;
@@ -106,7 +106,7 @@ void setup_routes(httplib::Server& svr) {
             
             res.set_content(moves_json.dump(), "application/json");
             res.status = 200;
-        } catch (const std::invalid_argument& e) {
+        } catch (const std::invalid_argument&) {
             json error = {{"error", "Invalid q or r parameter"}};
             res.set_content(error.dump(), "application/json");
             res.status = 400;

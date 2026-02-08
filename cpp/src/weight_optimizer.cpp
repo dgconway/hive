@@ -7,10 +7,10 @@
 namespace bugs {
 
 WeightOptimizer::WeightOptimizer() 
-    : config_(), rng_(std::chrono::steady_clock::now().time_since_epoch().count()) {}
+    : config_(), rng_(static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count())) {}
 
 WeightOptimizer::WeightOptimizer(const OptimizerConfig& config) 
-    : config_(config), rng_(std::chrono::steady_clock::now().time_since_epoch().count()) {}
+    : config_(config), rng_(static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count())) {}
 
 void WeightOptimizer::set_initial_weights(const EvalWeights& weights) {
     best_weights_ = weights;

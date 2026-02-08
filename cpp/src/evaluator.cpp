@@ -64,8 +64,8 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
     }
     
     // Material and mobility
-    int player_mobility = 0;
-    int opponent_mobility = 0;
+    size_t player_mobility = 0;
+    size_t opponent_mobility = 0;
     std::unordered_set<Hex, HexHash> opponent_queen_neighbors_set;
     if (opponent_queen_pos.has_value()) {
         auto neighbors = get_neighbors(opponent_queen_pos.value());
@@ -165,7 +165,7 @@ float evaluate_state(const Game& game, PlayerColor player, GameEngine& engine) {
         }
     }
     
-    score += (player_mobility - opponent_mobility) * 2.0f;
+    score += (static_cast<float>(player_mobility) - static_cast<float>(opponent_mobility)) * 2.0f;
     return score;
 }
 

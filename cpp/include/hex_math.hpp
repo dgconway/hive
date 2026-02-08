@@ -12,6 +12,8 @@ namespace bugs {
 using Hex = std::pair<int, int>;
 
 // Hex directions in axial coordinates (q, r)
+// Direction 1 is right = 1 (q is to the right)
+// Direction 2 is right and up = 1 (r is to the right and up)
 constexpr std::array<Hex, 6> HEX_DIRECTIONS = {{
     {1, 0}, {1, -1}, {0, -1},
     {-1, 0}, {-1, 1}, {0, 1}
