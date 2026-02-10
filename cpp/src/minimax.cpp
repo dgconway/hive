@@ -117,7 +117,7 @@ float MinimaxAI::score_action(const Action& action, const GameState& state, int 
         
         // Discourage Ants in early game - they get trapped easily
         if (action.piece_type == PieceType::ANT) {
-            if (state.game.turn_number >= 6) {
+            if (state.game.turn_number >= 10) {
                 score += 40.0f;
             } else {
                 score += 5.0f;
