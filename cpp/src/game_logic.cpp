@@ -245,7 +245,7 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         throw std::runtime_error("No piece at origin");
     }
     
-    Piece& piece_to_move = game.board[from_key].back();
+    Piece piece_to_move = game.board[from_key].back();
     
     if (piece_to_move.color != game.current_turn) {
         throw std::runtime_error("Cannot move opponent's piece");
