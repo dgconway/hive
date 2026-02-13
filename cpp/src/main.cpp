@@ -1,5 +1,5 @@
 #include "httplib.h"
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 #include "game_logic.hpp"
 #include "minimax.hpp"
 #include "benchmark.hpp"

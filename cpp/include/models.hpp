@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
-#include "json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace bugs {
 

@@ -9,9 +9,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Find OpenMP
 find_package(OpenMP REQUIRED)
 
+# Fetch Dependencies
+include(FetchContent)
+
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.2
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
-include_directories(${CMAKE_SOURCE_DIR}/external)
+include_directories(${CMAKE_SOURCE_DIR}/external) # Keeping for httplib.h
 
 # Source files
 set(SOURCES
@@ -44,9 +54,10 @@ set(REPRO_SOURCES
 add_executable(bugs_server ${SOURCES})
 add_executable(repro_crash ${REPRO_SOURCES})
 
-# Link OpenMP
-target_link_libraries(bugs_server PRIVATE OpenMP::OpenMP_CXX)
-target_link_libraries(repro_crash PRIVATE OpenMP::OpenMP_CXX)
+# Link Libraries
+# Note: nlohmann_json targets are namespaced as nlohmann_json::nlohmann_json
+target_link_libraries(bugs_server PRIVATE OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json)
+target_link_libraries(repro_crash PRIVATE OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json)
 
 # Platform-specific settings
 if(WIN32)

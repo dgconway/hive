@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <string>
 #include <fstream>
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 
 namespace bugs {
 
