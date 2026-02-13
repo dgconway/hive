@@ -24,7 +24,7 @@ public:
     Game create_game();
     std::optional<Game> get_game(const std::string& game_id);
     Game process_move(const std::string& game_id, const MoveRequest& move);
-    Game process_move_direct(Game game, const MoveRequest& move);
+    void process_move_inplace(Game& game, const MoveRequest& move);
     
     // Move generation
     std::vector<Hex> get_valid_moves(const std::string& game_id, int q, int r);
@@ -45,15 +45,15 @@ private:
     void execute_move(Game& game, const MoveRequest& move);
     
     // Movement validation
-    bool validate_queen_move(const Game& game, const Hex& start, const Hex& end, 
+    bool validate_queen_move(const Hex& start, const Hex& end, 
                             const std::unordered_set<Hex, HexHash>& occupied);
     bool validate_beetle_move(const Game& game, const Hex& start, const Hex& end, 
                              const std::unordered_set<Hex, HexHash>& occupied);
-    bool validate_grasshopper_move(const Game& game, const Hex& start, const Hex& end, 
+    bool validate_grasshopper_move(const Hex& start, const Hex& end, 
                                   const std::unordered_set<Hex, HexHash>& occupied);
-    bool validate_spider_move(const Game& game, const Hex& start, const Hex& end, 
+    bool validate_spider_move(const Hex& start, const Hex& end, 
                              const std::unordered_set<Hex, HexHash>& occupied);
-    bool validate_ant_move(const Game& game, const Hex& start, const Hex& end, 
+    bool validate_ant_move(const Hex& start, const Hex& end, 
                           const std::unordered_set<Hex, HexHash>& occupied);
     
     // Move generation

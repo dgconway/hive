@@ -102,7 +102,7 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     return game;
 }
 
-Game GameEngine::process_move_direct(Game game, const MoveRequest& move) {
+void GameEngine::process_move_inplace(Game& game, const MoveRequest& move) {
     if (game.status == GameStatus::FINISHED) {
         throw std::runtime_error("Game is finished");
     }
@@ -118,9 +118,9 @@ Game GameEngine::process_move_direct(Game game, const MoveRequest& move) {
     // Fill in piece type for moves if missing (for the log)
     if (move.action == ActionType::MOVE && !log.move.piece_type.has_value()) {
         if (move.from_hex.has_value()) {
-            Hex from = move.from_hex.value();
-            if (game.board.count(from) && !game.board.at(from).empty()) {
-                log.move.piece_type = game.board.at(from).back().type;
+            std::string from_key = coord_to_key(move.from_hex.value());
+            if (game.board.count(from_key) && !game.board[from_key].empty()) {
+                log.move.piece_type = game.board[from_key].back().type;
             }
         }
     }
@@ -139,8 +139,6 @@ Game GameEngine::process_move_direct(Game game, const MoveRequest& move) {
     game.current_turn = (game.current_turn == PlayerColor::WHITE) 
         ? PlayerColor::BLACK : PlayerColor::WHITE;
     game.turn_number++;
-    
-    return game;
 }
 
 // Validation
@@ -241,7 +239,7 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         throw std::runtime_error("No piece at origin");
     }
     
-    Piece& piece_to_move = game.board.at(move.from_hex.value()).back();
+    Piece piece_to_move = game.board[from_key].back();
     
     if (piece_to_move.color != game.current_turn) {
         throw std::runtime_error("Cannot move opponent's piece");
@@ -273,19 +271,19 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
     bool valid = false;
     switch (piece_to_move.type) {
         case PieceType::QUEEN:
-            valid = validate_queen_move(game, move.from_hex.value(), move.to_hex, occupied);
+            valid = validate_queen_move(move.from_hex.value(), move.to_hex, occupied);
             break;
         case PieceType::BEETLE:
             valid = validate_beetle_move(game, move.from_hex.value(), move.to_hex, occupied);
             break;
         case PieceType::GRASSHOPPER:
-            valid = validate_grasshopper_move(game, move.from_hex.value(), move.to_hex, occupied);
+            valid = validate_grasshopper_move(move.from_hex.value(), move.to_hex, occupied);
             break;
         case PieceType::SPIDER:
-            valid = validate_spider_move(game, move.from_hex.value(), move.to_hex, occupied);
+            valid = validate_spider_move(move.from_hex.value(), move.to_hex, occupied);
             break;
         case PieceType::ANT:
-            valid = validate_ant_move(game, move.from_hex.value(), move.to_hex, occupied);
+            valid = validate_ant_move(move.from_hex.value(), move.to_hex, occupied);
             break;
     }
     
@@ -342,7 +340,7 @@ std::unordered_set<Hex, HexHash> GameEngine::get_occupied_hexes(
 }
 
 // Movement validation functions
-bool GameEngine::validate_queen_move(const Game& game, const Hex& start, const Hex& end,
+bool GameEngine::validate_queen_move(const Hex& start, const Hex& end,
                                     const std::unordered_set<Hex, HexHash>& occupied) {
     if (!are_neighbors(start, end)) return false;
     if (occupied.count(end)) return false;
@@ -364,7 +362,7 @@ bool GameEngine::validate_beetle_move(const Game& game, const Hex& start, const 
     return true;
 }
 
-bool GameEngine::validate_grasshopper_move(const Game& game, const Hex& start, const Hex& end,
+bool GameEngine::validate_grasshopper_move(const Hex& start, const Hex& end,
                                           const std::unordered_set<Hex, HexHash>& occupied) {
     int dq = end.first - start.first;
     int dr = end.second - start.second;
@@ -388,7 +386,7 @@ bool GameEngine::validate_grasshopper_move(const Game& game, const Hex& start, c
     return current == end;
 }
 
-bool GameEngine::validate_spider_move(const Game& game, const Hex& start, const Hex& end,
+bool GameEngine::validate_spider_move(const Hex& start, const Hex& end,
                                       const std::unordered_set<Hex, HexHash>& occupied) {
     auto occupied_for_path = occupied;
     if (occupied_for_path.count(start)) {
@@ -431,7 +429,7 @@ bool GameEngine::validate_spider_move(const Game& game, const Hex& start, const 
     return find_spider_paths(start, 3, visited);
 }
 
-bool GameEngine::validate_ant_move(const Game& game, const Hex& start, const Hex& end,
+bool GameEngine::validate_ant_move(const Hex& start, const Hex& end,
                                    const std::unordered_set<Hex, HexHash>& occupied) {
     if (start == end) return false;
     if (occupied.count(end)) return false;

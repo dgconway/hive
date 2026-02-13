@@ -5,8 +5,7 @@
 #include <unordered_map>
 #include <optional>
 #include <memory>
-#include "json.hpp"
-#include "hex_math.hpp"
+#include <nlohmann/json.hpp>
 
 namespace bugs {
 
@@ -56,11 +55,17 @@ struct Piece {
         : type(t), color(c), id(std::move(i)) {}
 };
 
-struct MoveRequest {
+class MoveRequest {
+public:
     ActionType action;
     std::optional<PieceType> piece_type;
     std::optional<std::pair<int, int>> from_hex;
     std::pair<int, int> to_hex;
+
+    MoveRequest(ActionType a, std::pair<int, int> to, PieceType piece_type) : 
+    action(a), to_hex(to), piece_type(piece_type) {}
+    MoveRequest(ActionType a, std::pair<int, int> from, std::pair<int, int> to) : 
+    action(a), from_hex(from), to_hex(to) {}
 
     MoveRequest() = default;
     MoveRequest(ActionType a, std::pair<int, int> to)

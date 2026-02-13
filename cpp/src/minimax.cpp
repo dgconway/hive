@@ -12,16 +12,10 @@
 namespace bugs {
 
 MinimaxAI::MinimaxAI(int depth) : depth_(depth) {
-    // Initialize killer moves to empty
-    for (auto& depth_killers : killer_moves_) {
-        for (auto& killer : depth_killers) {
-            killer = std::nullopt;
-        }
-    }
+    // main_context_ is default-initialized by SearchContext constructor
 }
 
 std::string MinimaxAI::get_state_key(const GameState& state) {
-    BENCHMARK_SCOPE("get_state_key");
     std::stringstream ss;
     
     // Sort board keys for consistent hashing
@@ -80,11 +74,9 @@ uint64_t MinimaxAI::action_hash(const Action& action) const {
     return hash;
 }
 
-
-bool MinimaxAI::is_killer_move(const Action& action, int ply) const {
+bool MinimaxAI::is_killer_move(const Action& action, int ply, SearchContext& context) const {
     if (ply >= MAX_DEPTH) return false;
-    std::lock_guard<std::mutex> lock(minmax_mutex_);
-    for (const auto& killer : killer_moves_[ply]) {
+    for (const auto& killer : context.killer_moves[ply]) {
         if (killer.has_value()) {
             const auto& k = *killer;
             if (k.action_type == action.action_type &&
@@ -98,51 +90,30 @@ bool MinimaxAI::is_killer_move(const Action& action, int ply) const {
     return false;
 }
 
-void MinimaxAI::update_killer_move(const Action& action, int ply) {
-    // Don't store captures as killers (they have their own ordering)
-    // Shift killer moves and insert new one
+void MinimaxAI::update_killer_move(const Action& action, int ply, SearchContext& context) {
     if (ply < MAX_DEPTH && action.action_type == ActionType::MOVE) {
-        std::lock_guard<std::mutex> lock(minmax_mutex_);
-        killer_moves_[ply][1] = killer_moves_[ply][0];
-        killer_moves_[ply][0] = action;
+        context.killer_moves[ply][1] = context.killer_moves[ply][0];
+        context.killer_moves[ply][0] = action;
     }
 }
 
-
-// void MinimaxAI::update_killer_move(const Action& action, int ply) {
-//     if (ply >= MAX_DEPTH) return;
-//     // Don't store captures as killers (they have their own ordering)
-//     if (action.action_type != ActionType::MOVE) return;
-    
-//     std::lock_guard<std::mutex> lock(minmax_mutex_);
-//     // Shift killer moves and insert new one
-//     killer_moves_[ply][1] = killer_moves_[ply][0];
-//     killer_moves_[ply][0] = action;
-// }
-
-void MinimaxAI::update_history_score(const Action& action, int depth) {
+void MinimaxAI::update_history_score(const Action& action, int depth, SearchContext& context) {
     uint64_t hash = action_hash(action);
-    std::lock_guard<std::mutex> lock(minmax_mutex_);
-    history_scores_[hash] += depth * depth;  // Deeper moves get more weight
+    context.history_scores[hash] += depth * depth;
 }
 
-float MinimaxAI::score_action(const Action& action, const GameState& state, PlayerColor player, int ply) {
+float MinimaxAI::score_action(const Action& action, const GameState& state, int ply, SearchContext& context) {
     float score = 0.0f;
     
-    // TT best move gets highest priority (handled separately in move ordering)
-    
     // Killer moves get high priority
-    if (is_killer_move(action, ply)) {
+    if (is_killer_move(action, ply, context)) {
         score += 5000.0f;
     }
     
     // History heuristic
-    {
-        std::lock_guard<std::mutex> lock(minmax_mutex_);
-        auto hist_it = history_scores_.find(action_hash(action));
-        if (hist_it != history_scores_.end()) {
-            score += std::min(hist_it->second * 0.1f, 1000.0f);
-        }
+    auto hist_it = context.history_scores.find(action_hash(action));
+    if (hist_it != context.history_scores.end()) {
+        score += std::min(hist_it->second * 0.1f, 1000.0f);
     }
     
     if (action.action_type == ActionType::PLACE) {
@@ -150,7 +121,7 @@ float MinimaxAI::score_action(const Action& action, const GameState& state, Play
         
         // Discourage Ants in early game - they get trapped easily
         if (action.piece_type == PieceType::ANT) {
-            if (state.game.turn_number >= 6) {
+            if (state.game.turn_number >= 10) {
                 score += 40.0f;
             } else {
                 score += 5.0f;
@@ -167,8 +138,6 @@ float MinimaxAI::score_action(const Action& action, const GameState& state, Play
     return score;
 }
 
-
-
 std::optional<MoveRequest> MinimaxAI::get_best_move(const Game& game) {
     BENCHMARK_SCOPE("get_best_move");
     
@@ -179,6 +148,9 @@ std::optional<MoveRequest> MinimaxAI::get_best_move(const Game& game) {
     nodes_searched_ = 0;
     tt_hits_ = 0;
     tt_cutoffs_ = 0;
+    
+    // Clear main context for fresh search
+    main_context_.clear();
     
     // === OPENING BOOK ===
     int ai_pieces_played = 0;
@@ -214,19 +186,19 @@ std::optional<MoveRequest> MinimaxAI::get_best_move(const Game& game) {
         }
     }
     
-    // === ITERATIVE DEEPENING SEARCH ===
+    // === RUN MINIMAX ===
     auto start_time = std::chrono::high_resolution_clock::now();
     
     auto [score, best_action] = iterative_deepening(state, depth_, player);
     
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    double elapsed = std::chrono::duration<double>(end_time - start_time).count();
     
     std::cout << "Minimax complete. Score: " << score 
-              << ", Time: " << duration.count() / 1000.0 << "s"
-              << ", Nodes: " << nodes_searched_
-              << ", TT hits: " << tt_hits_
-              << ", TT cutoffs: " << tt_cutoffs_
+              << ", Time: " << elapsed << "s"
+              << ", Nodes: " << nodes_searched_.load()
+              << ", TT hits: " << tt_hits_.load()
+              << ", TT cutoffs: " << tt_cutoffs_.load()
               << std::endl;
     
     return best_action.has_value() ? std::make_optional(best_action->to_move_request()) : std::nullopt;
@@ -238,6 +210,9 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
     PlayerColor player) {
     
     BENCHMARK_SCOPE("iterative_deepening");
+    
+    // Use reasonable thread count - 4 threads is a good balance
+    omp_set_num_threads(4);
     
     std::optional<Action> best_action;
     float best_score = -std::numeric_limits<float>::infinity();
@@ -251,11 +226,9 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
 
     // Search from depth 1 to max_depth
     for (int depth = 1; depth <= max_depth; ++depth) {
-        // Move ordering: PV first, then others
-        // We use score_action which uses killer/history/heuristics
+        // Move ordering using main context
         std::sort(legal_actions.begin(), legal_actions.end(),
             [this, &state, player, &best_action](const Action& a, const Action& b) -> bool {
-                // If we have a best action from previous iteration, prioritize it
                 bool a_is_best = best_action.has_value() && 
                     a.action_type == best_action->action_type &&
                     a.to_hex == best_action->to_hex &&
@@ -268,7 +241,7 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
                 if (a_is_best && !b_is_best) return true;
                 if (b_is_best && !a_is_best) return false;
                 
-                return score_action(a, state, player, 0) > score_action(b, state, player, 0);
+                return score_action(a, state, 0, main_context_) > score_action(b, state, 0, main_context_);
             });
 
         float current_iter_alpha = -std::numeric_limits<float>::infinity();
@@ -277,39 +250,36 @@ std::pair<float, std::optional<Action>> MinimaxAI::iterative_deepening(
         std::optional<Action> iteration_best_action;
         float iteration_best_score = -std::numeric_limits<float>::infinity();
         
-        // 1. Search PV move serially
+        // 1. Search PV move serially using main context
         {
             GameState new_state = interface_.apply_action(state, legal_actions[0]);
-            auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1, interface_);
+            auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, 
+                                    false, player, 1, interface_, main_context_);
             if (val > iteration_best_score) {
                 iteration_best_score = val;
                 iteration_best_action = legal_actions[0];
-                current_iter_alpha = val; // Update alpha for subsequent searches
+                current_iter_alpha = val;
             }
         }
         
-        // 2. Search other moves in parallel with updated alpha
-        // We can't update alpha across threads easily in pure OpenMP, so each thread sees the initial alpha from PV
-        // But the TT is shared and locked, which might help cutoffs.
-        
+        // 2. Search other moves in parallel - each thread gets its own context
         std::vector<std::pair<float, Action>> parallel_results;
         parallel_results.resize(legal_actions.size());
-        
-        // Fix initial results for 0-th element
         parallel_results[0] = {iteration_best_score, legal_actions[0]};
 
         #pragma omp parallel for schedule(dynamic)
         for (int i = 1; i < (int)legal_actions.size(); ++i) {
             try {
-                // Thread-local interface to avoid race conditions on GameEngine
+                // Each thread gets its own completely independent context
                 GameInterface local_interface;
+                SearchContext local_context;  // Thread-local search context
+                
                 GameState new_state = local_interface.apply_action(state, legal_actions[i]);
-                // Use current_iter_alpha as lower bound, but valid window is still important
-                auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, false, player, 1, local_interface);
+                auto [val, _] = minimax(new_state, depth - 1, current_iter_alpha, current_iter_beta, 
+                                        false, player, 1, local_interface, local_context);
                 parallel_results[i] = {val, legal_actions[i]};
             } catch (const std::exception& e) {
                 std::cerr << "Minimax Error (Thread " << omp_get_thread_num() << "): " << e.what() << std::endl;
-                // Return worst possible score for this branch
                 parallel_results[i] = {-std::numeric_limits<float>::infinity(), legal_actions[i]};
             } catch (...) {
                 std::cerr << "Minimax Unknown Error (Thread " << omp_get_thread_num() << ")" << std::endl;
@@ -346,60 +316,48 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     bool is_maximizing,
     PlayerColor player,
     int ply,
-    GameInterface& game_interface) {
+    GameInterface& game_interface,
+    SearchContext& context) {
     
-    BENCHMARK_SCOPE_DEBUG("minimax");
     nodes_searched_++;
     
-    // Zobrist hash for transposition table
-    // Zobrist hash for transposition table
     uint64_t state_hash = get_zobrist_hash(state);
     
-    // Transposition table lookup
-    {
-        std::lock_guard<std::mutex> lock(minmax_mutex_);
-        auto tt_it = transposition_table_.find(state_hash);
-        if (tt_it != transposition_table_.end()) {
-            const TTEntry& entry = tt_it->second;
-            if (entry.depth >= depth) {
-                tt_hits_++;
-                // Check bound type
-                if (entry.bound == TTBound::EXACT) {
-                    tt_cutoffs_++;
-                    return {entry.score, entry.best_action};
-                } else if (entry.bound == TTBound::LOWER && entry.score >= beta) {
-                    tt_cutoffs_++;
-                    return {entry.score, entry.best_action};
-                } else if (entry.bound == TTBound::UPPER && entry.score <= alpha) {
-                    tt_cutoffs_++;
-                    return {entry.score, entry.best_action};
-                }
+    // Transposition table lookup (no mutex needed - context is thread-local)
+    auto tt_it = context.transposition_table.find(state_hash);
+    if (tt_it != context.transposition_table.end()) {
+        const TTEntry& entry = tt_it->second;
+        if (entry.depth >= depth) {
+            tt_hits_++;
+            if (entry.bound == TTBound::EXACT) {
+                tt_cutoffs_++;
+                return {entry.score, entry.best_action};
+            } else if (entry.bound == TTBound::LOWER && entry.score >= beta) {
+                tt_cutoffs_++;
+                return {entry.score, entry.best_action};
+            } else if (entry.bound == TTBound::UPPER && entry.score <= alpha) {
+                tt_cutoffs_++;
+                return {entry.score, entry.best_action};
             }
         }
     }
     
     // Terminal or depth limit
     if (depth == 0 || state.is_terminal()) {
-        BENCHMARK_SCOPE("evaluate_state");
         float score = evaluate_state(state.game, player, game_interface.get_engine());
         
         // Store in TT
-        std::lock_guard<std::mutex> lock(minmax_mutex_);
         TTEntry entry;
         entry.score = score;
         entry.depth = depth;
         entry.bound = TTBound::EXACT;
-        transposition_table_[state_hash] = entry;
+        context.transposition_table[state_hash] = entry;
         
         return {score, std::nullopt};
     }
     
     // Get legal actions
-    std::vector<Action> legal_actions;
-    {
-        BENCHMARK_SCOPE("get_legal_actions");
-        legal_actions = game_interface.get_legal_actions(state);
-    }
+    std::vector<Action> legal_actions = game_interface.get_legal_actions(state);
     
     if (legal_actions.empty()) {
         float score = evaluate_state(state.game, player, game_interface.get_engine());
@@ -408,34 +366,26 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
     
     // Move ordering: TT best move first, then sorted by score
     std::optional<Action> tt_best_action;
-    {
-        std::lock_guard<std::mutex> lock(minmax_mutex_);
-        auto tt_it = transposition_table_.find(state_hash);
-        if (tt_it != transposition_table_.end() && tt_it->second.best_action.has_value()) {
-            tt_best_action = tt_it->second.best_action;
-        }
+    if (tt_it != context.transposition_table.end() && tt_it->second.best_action.has_value()) {
+        tt_best_action = tt_it->second.best_action;
     }
     
-    {
-        BENCHMARK_SCOPE("move_ordering");
-        std::sort(legal_actions.begin(), legal_actions.end(),
-            [this, &state, player, ply, &tt_best_action](const Action& a, const Action& b) {
-                // TT best move gets highest priority
-                bool a_is_tt = tt_best_action.has_value() && 
-                    a.action_type == tt_best_action->action_type &&
-                    a.to_hex == tt_best_action->to_hex &&
-                    a.from_hex == tt_best_action->from_hex;
-                bool b_is_tt = tt_best_action.has_value() && 
-                    b.action_type == tt_best_action->action_type &&
-                    b.to_hex == tt_best_action->to_hex &&
-                    b.from_hex == tt_best_action->from_hex;
-                
-                if (a_is_tt && !b_is_tt) return true;
-                if (b_is_tt && !a_is_tt) return false;
-                
-                return score_action(a, state, player, ply) > score_action(b, state, player, ply);
-            });
-    }
+    std::sort(legal_actions.begin(), legal_actions.end(),
+        [this, &state, ply, &tt_best_action, &context](const Action& a, const Action& b) {
+            bool a_is_tt = tt_best_action.has_value() && 
+                a.action_type == tt_best_action->action_type &&
+                a.to_hex == tt_best_action->to_hex &&
+                a.from_hex == tt_best_action->from_hex;
+            bool b_is_tt = tt_best_action.has_value() && 
+                b.action_type == tt_best_action->action_type &&
+                b.to_hex == tt_best_action->to_hex &&
+                b.from_hex == tt_best_action->from_hex;
+            
+            if (a_is_tt && !b_is_tt) return true;
+            if (b_is_tt && !a_is_tt) return false;
+            
+            return score_action(a, state, ply, context) > score_action(b, state, ply, context);
+        });
     
     std::optional<Action> best_action;
     float original_alpha = alpha;
@@ -444,7 +394,8 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
         float curr_max = -std::numeric_limits<float>::infinity();
         for (const auto& action : legal_actions) {
             GameState new_state = game_interface.apply_action(state, action);
-            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, false, player, ply + 1, game_interface);
+            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, false, player, ply + 1, 
+                                         game_interface, context);
             
             if (eval_val > curr_max) {
                 curr_max = eval_val;
@@ -452,36 +403,33 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
             }
             alpha = std::max(alpha, eval_val);
             if (beta <= alpha) {
-                // Beta cutoff - update killer and history
-                update_killer_move(action, ply);
-                update_history_score(action, depth);
+                update_killer_move(action, ply, context);
+                update_history_score(action, depth, context);
                 break;
             }
         }
         
         // Store in transposition table
-        {
-            std::lock_guard<std::mutex> lock(minmax_mutex_);
-            TTEntry entry;
-            entry.score = curr_max;
-            entry.depth = depth;
-            entry.best_action = best_action;
-            if (curr_max <= original_alpha) {
-                entry.bound = TTBound::UPPER;
-            } else if (curr_max >= beta) {
-                entry.bound = TTBound::LOWER;
-            } else {
-                entry.bound = TTBound::EXACT;
-            }
-            transposition_table_[state_hash] = entry;
+        TTEntry entry;
+        entry.score = curr_max;
+        entry.depth = depth;
+        entry.best_action = best_action;
+        if (curr_max <= original_alpha) {
+            entry.bound = TTBound::UPPER;
+        } else if (curr_max >= beta) {
+            entry.bound = TTBound::LOWER;
+        } else {
+            entry.bound = TTBound::EXACT;
         }
+        context.transposition_table[state_hash] = entry;
         
         return {curr_max, best_action};
     } else {
         float curr_min = std::numeric_limits<float>::infinity();
         for (const auto& action : legal_actions) {
             GameState new_state = game_interface.apply_action(state, action);
-            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, true, player, ply + 1, game_interface);
+            auto [eval_val, _] = minimax(new_state, depth - 1, alpha, beta, true, player, ply + 1, 
+                                         game_interface, context);
             
             if (eval_val < curr_min) {
                 curr_min = eval_val;
@@ -489,28 +437,25 @@ std::pair<float, std::optional<Action>> MinimaxAI::minimax(
             }
             beta = std::min(beta, eval_val);
             if (beta <= alpha) {
-                update_killer_move(action, ply);
-                update_history_score(action, depth);
+                update_killer_move(action, ply, context);
+                update_history_score(action, depth, context);
                 break;
             }
         }
         
         // Store in transposition table
-        {
-            std::lock_guard<std::mutex> lock(minmax_mutex_);
-            TTEntry entry;
-            entry.score = curr_min;
-            entry.depth = depth;
-            entry.best_action = best_action;
-            if (curr_min >= beta) {
-                entry.bound = TTBound::LOWER;
-            } else if (curr_min <= original_alpha) {
-                entry.bound = TTBound::UPPER;
-            } else {
-                entry.bound = TTBound::EXACT;
-            }
-            transposition_table_[state_hash] = entry;
+        TTEntry entry;
+        entry.score = curr_min;
+        entry.depth = depth;
+        entry.best_action = best_action;
+        if (curr_min >= beta) {
+            entry.bound = TTBound::LOWER;
+        } else if (curr_min <= original_alpha) {
+            entry.bound = TTBound::UPPER;
+        } else {
+            entry.bound = TTBound::EXACT;
         }
+        context.transposition_table[state_hash] = entry;
         
         return {curr_min, best_action};
     }

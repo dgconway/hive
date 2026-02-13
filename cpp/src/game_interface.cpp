@@ -185,7 +185,7 @@ std::vector<Hex> GameInterface::get_valid_placement_hexes(const Game& game) {
 std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves(const Game& game) {
     std::vector<std::pair<Hex, std::vector<Hex>>> moves;
     
-    // Get occupied hexes for move generation
+    // Pre-calculate occupied hexes once
     auto occupied = engine_.get_occupied_hexes(game.board);
     
     for (const auto& [pos, stack] : game.board) {
@@ -194,7 +194,7 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
         const Piece& top_piece = stack.back();
         if (top_piece.color != game.current_turn) continue;
         
-        // Call get_valid_moves_for_piece directly - no games_ map needed
+        Hex pos = key_to_coord(key);
         auto valid_destinations = engine_.get_valid_moves_for_piece(game, pos, occupied);
         
         if (!valid_destinations.empty()) {
@@ -206,9 +206,12 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
 }
 
 GameState GameInterface::apply_action(const GameState& state, const Action& action) {
-    // Use process_move_direct to avoid games_ map dependency
-    Game new_game = engine_.process_move_direct(state.game, action.to_move_request());
-    return GameState(new_game);
+    GameState new_state(state);
+    
+    // Process move directly on the game copy, no map lookup needed
+    engine_.process_move_inplace(new_state.game, action.to_move_request());
+    
+    return new_state;
 }
 
 } // namespace bugs

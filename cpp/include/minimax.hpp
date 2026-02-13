@@ -33,6 +33,31 @@ struct TTEntry {
 static constexpr int KILLER_SLOTS = 2;
 static constexpr int MAX_DEPTH = 16;
 
+// Thread-local search context - each thread gets its own copy
+struct SearchContext {
+    std::unordered_map<uint64_t, TTEntry> transposition_table;
+    std::array<std::array<std::optional<Action>, KILLER_SLOTS>, MAX_DEPTH> killer_moves;
+    std::unordered_map<uint64_t, int> history_scores;
+    
+    SearchContext() {
+        for (auto& depth_killers : killer_moves) {
+            for (auto& killer : depth_killers) {
+                killer = std::nullopt;
+            }
+        }
+    }
+    
+    void clear() {
+        transposition_table.clear();
+        history_scores.clear();
+        for (auto& depth_killers : killer_moves) {
+            for (auto& killer : depth_killers) {
+                killer = std::nullopt;
+            }
+        }
+    }
+};
+
 class MinimaxAI {
 public:
     explicit MinimaxAI(int depth = 4);
@@ -47,18 +72,11 @@ private:
     int depth_;
     GameInterface interface_;
     GameEngine engine_;
-    mutable std::mutex minmax_mutex_;
     
-    // Improved transposition table using Zobrist hash
-    std::unordered_map<uint64_t, TTEntry> transposition_table_;
+    // Main search context (used for serial search and PV)
+    SearchContext main_context_;
     
-    // Killer moves for move ordering (indexed by depth)
-    std::array<std::array<std::optional<Action>, KILLER_SLOTS>, MAX_DEPTH> killer_moves_;
-    
-    // History heuristic scores
-    std::unordered_map<uint64_t, int> history_scores_;
-    
-    // Search statistics
+    // Search statistics (atomic for thread-safe updates)
     std::atomic<int64_t> nodes_searched_ = 0;
     std::atomic<int64_t> tt_hits_ = 0;
     std::atomic<int64_t> tt_cutoffs_ = 0;
@@ -76,6 +94,7 @@ private:
         PlayerColor player
     );
     
+    // Minimax with explicit context parameter for thread safety
     std::pair<float, std::optional<Action>> minimax(
         const GameState& state,
         int depth,
@@ -84,17 +103,19 @@ private:
         bool is_maximizing,
         PlayerColor player,
         int ply,
-        GameInterface& game_interface
+        GameInterface& game_interface,
+        SearchContext& context
     );
     
-    // Move ordering
-    float score_action(const Action& action, const GameState& state, PlayerColor player, int ply);
-    void update_killer_move(const Action& action, int ply);
-    void update_history_score(const Action& action, int depth);
+    // Move ordering helpers - now take context as parameter
+    float score_action(const Action& action, const GameState& state, int ply, SearchContext& context);
+    void update_killer_move(const Action& action, int ply, SearchContext& context);
+    void update_history_score(const Action& action, int depth, SearchContext& context);
     uint64_t action_hash(const Action& action) const;
     
     // Check if action matches a killer move
-    bool is_killer_move(const Action& action, int ply) const;
+    bool is_killer_move(const Action& action, int ply, SearchContext& context) const;
 };
 
 } // namespace bugs
+

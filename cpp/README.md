@@ -17,10 +17,7 @@ C++ implementation of the BUGS game backend with REST API.
 
 ```bash
 cd cpp
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+cmake --build build --config Release
 ```
 
 ## Running
