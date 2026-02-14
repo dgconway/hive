@@ -17,11 +17,15 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG v3.11.2
 )
-FetchContent_MakeAvailable(nlohmann_json)
+FetchContent_Declare(
+    cpp-httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG v0.18.3
+)
+FetchContent_MakeAvailable(nlohmann_json cpp-httplib)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
-include_directories(${CMAKE_SOURCE_DIR}/external) # Keeping for httplib.h
 
 # Source files
 set(SOURCES
@@ -56,7 +60,7 @@ add_executable(repro_crash ${REPRO_SOURCES})
 
 # Link Libraries
 # Note: nlohmann_json targets are namespaced as nlohmann_json::nlohmann_json
-target_link_libraries(bugs_server PRIVATE OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json)
+target_link_libraries(bugs_server PRIVATE OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json httplib::httplib)
 target_link_libraries(repro_crash PRIVATE OpenMP::OpenMP_CXX nlohmann_json::nlohmann_json)
 
 # Platform-specific settings
@@ -73,6 +77,7 @@ else()
     target_compile_options(bugs_server PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(repro_crash PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
 
 # Optional: Build tests
 option(BUILD_TESTS "Build unit tests" OFF)

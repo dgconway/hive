@@ -118,9 +118,9 @@ void GameEngine::process_move_inplace(Game& game, const MoveRequest& move) {
     // Fill in piece type for moves if missing (for the log)
     if (move.action == ActionType::MOVE && !log.move.piece_type.has_value()) {
         if (move.from_hex.has_value()) {
-            std::string from_key = coord_to_key(move.from_hex.value());
-            if (game.board.count(from_key) && !game.board[from_key].empty()) {
-                log.move.piece_type = game.board[from_key].back().type;
+            Hex from = move.from_hex.value();
+            if (game.board.count(from) && !game.board.at(from).empty()) {
+                log.move.piece_type = game.board.at(from).back().type;
             }
         }
     }
@@ -239,7 +239,7 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         throw std::runtime_error("No piece at origin");
     }
     
-    Piece piece_to_move = game.board[from_key].back();
+    Piece piece_to_move = game.board.at(move.from_hex.value()).back();
     
     if (piece_to_move.color != game.current_turn) {
         throw std::runtime_error("Cannot move opponent's piece");

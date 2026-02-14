@@ -6,6 +6,7 @@
 #include <optional>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include "hex_math.hpp"
 
 namespace bugs {
 

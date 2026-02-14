@@ -194,7 +194,7 @@ std::vector<std::pair<Hex, std::vector<Hex>>> GameInterface::get_all_valid_moves
         const Piece& top_piece = stack.back();
         if (top_piece.color != game.current_turn) continue;
         
-        Hex pos = key_to_coord(key);
+        // Hex pos = key_to_coord(key);
         auto valid_destinations = engine_.get_valid_moves_for_piece(game, pos, occupied);
         
         if (!valid_destinations.empty()) {
