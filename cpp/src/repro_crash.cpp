@@ -116,6 +116,14 @@ void game1() {
     m = MoveRequest(ActionType::MOVE, {-1,-1}, {-1,0});
     game = engine.process_move(game.game_id, m);
 
+    if (game.status != GameStatus::FINISHED) {
+        throw std::runtime_error("game should be over");
+    }
+
+    if (game.winner != PlayerColor::BLACK) {
+        throw std::runtime_error("Black should have won game1");
+    }
+
     // TODO check that game ends in draw. 
 
 }
@@ -234,6 +242,10 @@ void game2() {
     m = MoveRequest(ActionType::MOVE, {-3,3}, {-2,3});
     game = engine.process_move(game.game_id, m);
 
+    if (game.winner != PlayerColor::BLACK) {
+        throw std::runtime_error("Black should have won game2");
+    }
+
 
 }
 
@@ -327,17 +339,192 @@ void game3() {
     m = MoveRequest(ActionType::MOVE, { -2,-1 }, { -1,1 });
     game = engine.process_move(game.game_id, m);
 
+    if (game.winner != PlayerColor::BLACK) {
+        throw std::runtime_error("Black should have won game3");
+    }
 
 }
 
+std::pair<GameEngine, Game> setup_test() {
+    GameEngine engine;
+    Game game = engine.create_game();
+    MoveRequest m;
+
+    m = MoveRequest(ActionType::PLACE, { 0,0 }, PieceType::QUEEN);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -1,1 }, PieceType::QUEEN);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 1,0 }, PieceType::BEETLE);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -2,2 }, PieceType::ANT);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 1,-1 }, PieceType::BEETLE);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -1,2 }, PieceType::SPIDER);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 0,-1 }, PieceType::ANT);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 0,2 }, PieceType::BEETLE);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -1,-1 }, PieceType::GRASSHOPPER);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::MOVE, { 0,2 }, { 0, 1 });
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -2,0 }, PieceType::GRASSHOPPER);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::MOVE, { -1,1 }, { -2, 1 });
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 2,0 }, PieceType::SPIDER);
+    game = engine.process_move(game.game_id, m);
+
+    return {engine, game};
+}
+
+
+void test_queen_bee() {
+    auto [engine, game] = setup_test();
+    MoveRequest m;
+
+    // assert that valid moves for the queen are: 
+    // {-3, 2}, {-3, 1}, {-1, 1}, {-1, 0}
+
+    std::vector<std::pair<int, int>> coords = {
+        {-3, 2}, { -3, 1 }, { -1, 1 }, { -1, 0 }
+    };
+
+    for (const auto& [x, y] : coords) {
+        m = MoveRequest(ActionType::MOVE, { -2,1 }, {x, y});
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { 1,-1 }, { 1,-2 });
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { x,y }, { -2,1 });
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { 1,-2 }, { 1,-1 });
+        game = engine.process_move(game.game_id, m);
+
+    }
+
+
+}
+
+void test_ant() {
+    auto [engine, game] = setup_test();
+    MoveRequest m;
+
+    // assert that valid moves for the ant on {-2,2} are: 
+    // {-2, 3}, {-1, 2}, {0, 2}, {1,1}, {2,0}, {2,-1}, {2,-2}
+    // {1,-2}, {0, -2}, {-1, -2}, {-2, -1}, {-3, 0}
+    // {-3, 1}, {-3, 2}
+    std::vector<std::pair<int, int>> coords = {
+        {-2, 3}, {-1, 2}, {0, 2}, {1,1}, {2,0}, {2,-1}, {2,-2},
+        {1,-2}, {0, -2}, {-1, -2}, {-2, -1}, {-3, 0},
+        {-3, 1}, {-3, 2}
+    };
+
+    for (const auto& [x, y] : coords) {
+        m = MoveRequest(ActionType::MOVE, { -2,2 }, { x, y });
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { 1,-1 }, { 1,-2 });
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { x,y }, { -2,2 });
+        game = engine.process_move(game.game_id, m);
+
+        m = MoveRequest(ActionType::MOVE, { 1,-2 }, { 1,-1 });
+        game = engine.process_move(game.game_id, m);
+
+    }
+
+    // move the ant from {-2,2} to {-3, 1}
+    m = MoveRequest(ActionType::MOVE, { -2,2 }, { -3, 1 });
+    game = engine.process_move(game.game_id, m);
+
+    // move the beetle from {1,-1} to {1,-2}
+    m = MoveRequest(ActionType::MOVE, { 1,-1 }, { 1,-2 });
+    game = engine.process_move(game.game_id, m);
+
+
+    // assert that the ant cannot move to {-1,1} or {-1,0} - testing 
+    // freedom of movement
+
+    bool invalid_freedom_of_movement_threw_exception = false;
+
+    try {
+        m = MoveRequest(ActionType::MOVE, { -2,2 }, { -1, 1 });
+        game = engine.process_move(game.game_id, m);
+    } catch (const std::runtime_error&) {
+        invalid_freedom_of_movement_threw_exception = true;  // expected
+    }
+    if (!invalid_freedom_of_movement_threw_exception) {
+        throw std::runtime_error("freedom of movement was not respected");
+    }
+
+    invalid_freedom_of_movement_threw_exception = false;
+
+    try {
+        m = MoveRequest(ActionType::MOVE, { -2,2 }, { -1, 0 });
+        game = engine.process_move(game.game_id, m);
+    }
+    catch (const std::runtime_error&) {
+        invalid_freedom_of_movement_threw_exception = true;  // expected
+    }
+    if (!invalid_freedom_of_movement_threw_exception) {
+        throw std::runtime_error("freedom of movement was not respected");
+    }
+
+}
+
+void test_spider() {
+    auto [engine, game] = setup_test();
+
+    // assert that valid moves for the spider on {-1, 2} are {2,0} and {-3,2}
+
+    // move the ant from {-2,2} to {1,-2}
+    // move the beetle from {1,0} to {2,-1}
+
+    // assert that valid moves for the spider on {-1, 2} are {2,0} and {-3,2}
+
+}
+
+void test_beetle() {
+    auto [engine, game] = setup_test();
+
+    // assert that valid moves for the beetle on {0,1} are {1,1}, {0,2}, {1,0}, {0,0}
+}
+
+
+
 int main() {
-    std::cout << "Starting game 1..." << std::endl;
-    game1();
-    std::cout << "Starting game 2..." << std::endl;
-    game2();
-    std::cout << "Starting game 3..." << std::endl;
-    game3();
+    //std::cout << "Starting game 1..." << std::endl;
+    //game1();
+    //std::cout << "Starting game 2..." << std::endl;
+    //game2();
+    //std::cout << "Starting game 3..." << std::endl;
+    //game3();
+    std::cout << "Testing queen moves..." << std::endl;
+    test_queen_bee();
+    std::cout << "Testing ant moves...." << std::endl;
+    test_ant();
     std::cout << "Tests passed!" << std::endl;
+
+    // TODO I think that there might be a better way to 'get all valid moves'
+    // I wonder if right now in the backend we are checking all squares. 
     return 0;
 }
 
