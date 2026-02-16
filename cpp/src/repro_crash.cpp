@@ -120,8 +120,8 @@ void game1() {
         throw std::runtime_error("game should be over");
     }
 
-    if (game.winner != PlayerColor::BLACK) {
-        throw std::runtime_error("Black should have won game1");
+    if (game.winner) {
+        throw std::runtime_error("The game should be a draw");
     }
 
     // TODO check that game ends in draw. 
@@ -427,12 +427,9 @@ void test_ant() {
     MoveRequest m;
 
     // assert that valid moves for the ant on {-2,2} are: 
-    // {-2, 3}, {-1, 2}, {0, 2}, {1,1}, {2,0}, {2,-1}, {2,-2}
-    // {1,-2}, {0, -2}, {-1, -2}, {-2, -1}, {-3, 0}
-    // {-3, 1}, {-3, 2}
     std::vector<std::pair<int, int>> coords = {
-        {-2, 3}, {-1, 2}, {0, 2}, {1,1}, {2,0}, {2,-1}, {2,-2},
-        {1,-2}, {0, -2}, {-1, -2}, {-2, -1}, {-3, 0},
+        {-2, 3}, {-1, 3}, {0, 2}, {1,1}, {2,1}, {3,0}, {3,-1},
+        {2,-1}, {0, -2}, {-1, -2}, {-2, -1}, {-3, 0},
         {-3, 1}, {-3, 2}
     };
 
@@ -488,6 +485,18 @@ void test_ant() {
         throw std::runtime_error("freedom of movement was not respected");
     }
 
+    bool not_connected = false; 
+    try {
+        m = MoveRequest(ActionType::MOVE, { -2,2 }, { -2, 4 });
+        game = engine.process_move(game.game_id, m);
+    }
+    catch (const std::runtime_error&) {
+        not_connected = true;  // expected
+    }
+    if (!not_connected) {
+        throw std::runtime_error("the ant was allowed to move to a place not connected to the hive");
+    }
+
 }
 
 void test_spider() {
@@ -521,6 +530,10 @@ int main() {
     test_queen_bee();
     std::cout << "Testing ant moves...." << std::endl;
     test_ant();
+    std::cout << "testing beetle moves..." << std::endl;
+    test_beetle();
+    std::cout << "testing grasshopper moves...." << std::endl;
+    test_grasshopper();
     std::cout << "Tests passed!" << std::endl;
 
     // TODO I think that there might be a better way to 'get all valid moves'

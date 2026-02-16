@@ -355,9 +355,10 @@ bool GameEngine::validate_beetle_move(const Game& game, const Hex& start, const 
     size_t start_z = game.board.count(start) ? game.board.at(start).size() : 0;
     bool is_dest_empty = !occupied.count(end);
     
-    if (start_z == 1 && is_dest_empty) {
-        if (!can_slide(start, end, occupied)) return false;
-    }
+    // beetle does not need to respect freedom of movement
+    //if (start_z == 1 && is_dest_empty) {
+    //    if (!can_slide(start, end, occupied)) return false;
+    //}
     
     return true;
 }
