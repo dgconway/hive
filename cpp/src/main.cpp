@@ -19,9 +19,16 @@ EvalWeights g_current_weights;
 
 void setup_routes(httplib::Server& svr) {
     // POST /games - Create new game
-    svr.Post("/games", [](const httplib::Request&, httplib::Response& res) {
+    svr.Post("/games", [](const httplib::Request& req, httplib::Response& res) {
         try {
-            Game game = g_engine->create_game();
+            bool advanced_mode = false;
+            if (!req.body.empty()) {
+                json body = json::parse(req.body);
+                if (body.contains("advanced_mode")) {
+                    advanced_mode = body["advanced_mode"].get<bool>();
+                }
+            }
+            Game game = g_engine->create_game(advanced_mode);
             json j = game;
             res.set_content(j.dump(), "application/json");
             res.status = 200;

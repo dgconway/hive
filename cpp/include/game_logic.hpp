@@ -21,7 +21,7 @@ public:
     friend class GameInterface;
 
     // Game management
-    Game create_game();
+    Game create_game(bool advanced_mode = false);
     std::optional<Game> get_game(const std::string& game_id);
     Game process_move(const std::string& game_id, const MoveRequest& move);
     void process_move_inplace(Game& game, const MoveRequest& move);
@@ -47,14 +47,17 @@ private:
     // Movement validation
     bool validate_queen_move(const Hex& start, const Hex& end, 
                             const std::unordered_set<Hex, HexHash>& occupied);
-    bool validate_beetle_move(const Game& game, const Hex& start, const Hex& end, 
-                             const std::unordered_set<Hex, HexHash>& occupied);
+    bool validate_beetle_move(const Hex& start, const Hex& end);
     bool validate_grasshopper_move(const Hex& start, const Hex& end, 
                                   const std::unordered_set<Hex, HexHash>& occupied);
     bool validate_spider_move(const Hex& start, const Hex& end, 
                              const std::unordered_set<Hex, HexHash>& occupied);
     bool validate_ant_move(const Hex& start, const Hex& end, 
                           const std::unordered_set<Hex, HexHash>& occupied);
+    bool validate_ladybug_move(const Game& game, const Hex& start, const Hex& end,
+                              const std::unordered_set<Hex, HexHash>& occupied);
+    bool validate_mosquito_move(const Game& game, const Hex& start, const Hex& end,
+                               const std::unordered_set<Hex, HexHash>& occupied);
     
     // Move generation
     std::unordered_set<Hex, HexHash> gen_queen_moves(
@@ -67,6 +70,10 @@ private:
         const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> gen_ant_moves(
         const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
+    std::unordered_set<Hex, HexHash> gen_ladybug_moves(
+        const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
+    std::unordered_set<Hex, HexHash> gen_mosquito_moves(
+        const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     
     // Helpers
     bool can_slide(const Hex& start, const Hex& end, 

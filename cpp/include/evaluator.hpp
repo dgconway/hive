@@ -12,7 +12,9 @@ const std::unordered_map<PieceType, float> PIECE_VALUES = {
     {PieceType::ANT, 80.0f},
     {PieceType::BEETLE, 60.0f},
     {PieceType::GRASSHOPPER, 40.0f},
-    {PieceType::SPIDER, 30.0f}
+    {PieceType::SPIDER, 30.0f},
+    {PieceType::LADYBUG, 50.0f},
+    {PieceType::MOSQUITO, 70.0f}
 };
 
 // Forward declaration

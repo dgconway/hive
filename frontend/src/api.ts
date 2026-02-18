@@ -9,7 +9,9 @@ export enum PieceType {
     ANT = "ANT",
     SPIDER = "SPIDER",
     BEETLE = "BEETLE",
-    GRASSHOPPER = "GRASSHOPPER"
+    GRASSHOPPER = "GRASSHOPPER",
+    LADYBUG = "LADYBUG",
+    MOSQUITO = "MOSQUITO"
 }
 
 export enum PlayerColor {
@@ -32,10 +34,11 @@ export interface Game {
     black_pieces_hand: Record<PieceType, number>;
     winner: PlayerColor | null;
     status: string;
+    advanced_mode: boolean;
 }
 
-export const createGame = async (): Promise<Game> => {
-    const response = await api.post<Game>('/games');
+export const createGame = async (advancedMode: boolean = false): Promise<Game> => {
+    const response = await api.post<Game>('/games', { advanced_mode: advancedMode });
     return response.data;
 };
 

@@ -33,13 +33,19 @@ namespace {
 }
 
 // Game management
-Game GameEngine::create_game() {
+Game GameEngine::create_game(bool advanced_mode) {
     Game game;
     game.game_id = generate_uuid();
     game.current_turn = PlayerColor::WHITE;
     game.turn_number = 1;
-    game.white_pieces_hand = create_initial_hand();
-    game.black_pieces_hand = create_initial_hand();
+    game.advanced_mode = advanced_mode;
+    if (advanced_mode) {
+        game.white_pieces_hand = create_advanced_hand();
+        game.black_pieces_hand = create_advanced_hand();
+    } else {
+        game.white_pieces_hand = create_initial_hand();
+        game.black_pieces_hand = create_initial_hand();
+    }
     game.status = GameStatus::IN_PROGRESS;
     
     games_[game.game_id] = game;
@@ -274,7 +280,7 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
             valid = validate_queen_move(move.from_hex.value(), move.to_hex, occupied);
             break;
         case PieceType::BEETLE:
-            valid = validate_beetle_move(game, move.from_hex.value(), move.to_hex, occupied);
+            valid = validate_beetle_move(move.from_hex.value(), move.to_hex);
             break;
         case PieceType::GRASSHOPPER:
             valid = validate_grasshopper_move(move.from_hex.value(), move.to_hex, occupied);
@@ -284,6 +290,12 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
             break;
         case PieceType::ANT:
             valid = validate_ant_move(move.from_hex.value(), move.to_hex, occupied);
+            break;
+        case PieceType::LADYBUG:
+            valid = validate_ladybug_move(game, move.from_hex.value(), move.to_hex, occupied);
+            break;
+        case PieceType::MOSQUITO:
+            valid = validate_mosquito_move(game, move.from_hex.value(), move.to_hex, occupied);
             break;
     }
     
@@ -348,20 +360,21 @@ bool GameEngine::validate_queen_move(const Hex& start, const Hex& end,
     return true;
 }
 
-bool GameEngine::validate_beetle_move(const Game& game, const Hex& start, const Hex& end,
-                                      const std::unordered_set<Hex, HexHash>& occupied) {
-
+bool GameEngine::validate_beetle_move(const Hex& start, const Hex& end) {
     return are_neighbors(start, end);
-    
-    // size_t start_z = game.board.count(start) ? game.board.at(start).size() : 0;
-    // bool is_dest_empty = !occupied.count(end);
-    
-    // beetle does not need to respect freedom of movement
-    //if (start_z == 1 && is_dest_empty) {
-    //    if (!can_slide(start, end, occupied)) return false;
-    //}
-    
 }
+
+// bool GameEngine::validate_beetle_move(const Game& game, const Hex& start, const Hex& end,
+//                                       const std::unordered_set<Hex, HexHash>& occupied) {
+//     if (!are_neighbors(start, end)) return false;
+//     size_t start_z = game.board.count(start) ? game.board.at(start).size() : 0;
+//     bool is_dest_empty = !occupied.count(end);
+//     beetle does not need to respect freedom of movement
+//     if (start_z == 1 && is_dest_empty) {
+//        if (!can_slide(start, end, occupied)) return false;
+//     }
+//     return true;
+// }
 
 bool GameEngine::validate_grasshopper_move(const Hex& start, const Hex& end,
                                           const std::unordered_set<Hex, HexHash>& occupied) {
@@ -612,6 +625,129 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_ant_moves(
     return moves;
 }
 
+// Ladybug validation
+bool GameEngine::validate_ladybug_move(const Game& game, const Hex& start, const Hex& end,
+                                       const std::unordered_set<Hex, HexHash>& occupied) {
+    auto candidates = gen_ladybug_moves(game, start, occupied);
+    return candidates.count(end) > 0;
+}
+
+// Mosquito validation
+bool GameEngine::validate_mosquito_move(const Game& game, const Hex& start, const Hex& end,
+                                        const std::unordered_set<Hex, HexHash>& occupied) {
+    auto candidates = gen_mosquito_moves(game, start, occupied);
+    return candidates.count(end) > 0;
+}
+
+// Ladybug move generation
+// Moves exactly 3 steps: first 2 on top of hive, last 1 down to empty ground
+std::unordered_set<Hex, HexHash> GameEngine::gen_ladybug_moves(
+    const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
+    std::unordered_set<Hex, HexHash> valid_ends;
+    
+    // Step 1: move on top of an adjacent occupied hex
+    for (const auto& step1 : get_neighbors(start)) {
+        if (!occupied.count(step1)) continue; // must step onto occupied hex
+        
+        // Step 2: move on top of another adjacent occupied hex (different from start)
+        for (const auto& step2 : get_neighbors(step1)) {
+            if (step2 == start) continue; // can't go back to start
+            if (!occupied.count(step2)) continue; // must be on top of hive
+            
+            // Step 3: move down to an empty adjacent hex
+            for (const auto& step3 : get_neighbors(step2)) {
+                if (step3 == start) continue; // can't return to start
+                if (occupied.count(step3)) continue; // must land on empty hex
+                
+                // Must be connected to hive after landing
+                bool has_contact = false;
+                for (const auto& nb : get_neighbors(step3)) {
+                    if (occupied.count(nb)) {
+                        has_contact = true;
+                        break;
+                    }
+                }
+                if (has_contact) {
+                    valid_ends.insert(step3);
+                }
+            }
+        }
+    }
+    
+    return valid_ends;
+}
+
+// Mosquito move generation
+// At ground level: copies movement of any touching piece type
+// On top of stack (beetle-like): moves as beetle
+// If touching only other mosquito(es): cannot move
+std::unordered_set<Hex, HexHash> GameEngine::gen_mosquito_moves(
+    const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
+    std::unordered_set<Hex, HexHash> all_moves;
+    
+    // Check if mosquito is on top of a stack (beetle-like position)
+    size_t stack_height = game.board.count(start) ? game.board.at(start).size() : 0;
+    if (stack_height > 1) {
+        // On top of stack: move as beetle
+        return gen_beetle_moves(game, start, occupied);
+    }
+    
+    // At ground level: gather all neighboring piece types
+    std::unordered_set<PieceType> neighbor_types;
+    for (const auto& n : get_neighbors(start)) {
+        if (game.board.count(n) && !game.board.at(n).empty()) {
+            const Piece& top = game.board.at(n).back();
+            neighbor_types.insert(top.type);
+        }
+    }
+    
+    // If touching only mosquito(es) and no other piece types, cannot move
+    if (neighbor_types.size() == 1 && neighbor_types.count(PieceType::MOSQUITO)) {
+        return all_moves; // empty
+    }
+    
+    // If a stacked beetle is adjacent, mosquito can also move as beetle
+    for (const auto& n : get_neighbors(start)) {
+        if (game.board.count(n) && game.board.at(n).size() > 1) {
+            // There's a stack — the mosquito can copy beetle movement
+            neighbor_types.insert(PieceType::BEETLE);
+            break;
+        }
+    }
+    
+    // Generate moves for each neighboring piece type (excluding mosquito)
+    for (PieceType pt : neighbor_types) {
+        if (pt == PieceType::MOSQUITO) continue;
+        
+        std::unordered_set<Hex, HexHash> moves;
+        switch (pt) {
+            case PieceType::QUEEN:
+                moves = gen_queen_moves(start, occupied);
+                break;
+            case PieceType::BEETLE:
+                moves = gen_beetle_moves(game, start, occupied);
+                break;
+            case PieceType::GRASSHOPPER:
+                moves = gen_grasshopper_moves(start, occupied);
+                break;
+            case PieceType::SPIDER:
+                moves = gen_spider_moves(start, occupied);
+                break;
+            case PieceType::ANT:
+                moves = gen_ant_moves(start, occupied);
+                break;
+            case PieceType::LADYBUG:
+                moves = gen_ladybug_moves(game, start, occupied);
+                break;
+            default:
+                break;
+        }
+        all_moves.insert(moves.begin(), moves.end());
+    }
+    
+    return all_moves;
+}
+
 // Get valid moves
 std::vector<Hex> GameEngine::get_valid_moves(const std::string& game_id, int q, int r) {
     auto game_opt = get_game(game_id);
@@ -671,6 +807,12 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
             break;
         case PieceType::ANT:
             candidates = gen_ant_moves(from_hex, occupied_after_lift);
+            break;
+        case PieceType::LADYBUG:
+            candidates = gen_ladybug_moves(game, from_hex, occupied_after_lift);
+            break;
+        case PieceType::MOSQUITO:
+            candidates = gen_mosquito_moves(game, from_hex, occupied_after_lift);
             break;
     }
     

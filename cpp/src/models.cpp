@@ -12,6 +12,8 @@ std::string to_string(PieceType type) {
         case PieceType::SPIDER: return "SPIDER";
         case PieceType::BEETLE: return "BEETLE";
         case PieceType::GRASSHOPPER: return "GRASSHOPPER";
+        case PieceType::LADYBUG: return "LADYBUG";
+        case PieceType::MOSQUITO: return "MOSQUITO";
     }
     throw std::invalid_argument("Invalid PieceType");
 }
@@ -34,6 +36,8 @@ PieceType piece_type_from_string(const std::string& str) {
     if (str == "SPIDER") return PieceType::SPIDER;
     if (str == "BEETLE") return PieceType::BEETLE;
     if (str == "GRASSHOPPER") return PieceType::GRASSHOPPER;
+    if (str == "LADYBUG") return PieceType::LADYBUG;
+    if (str == "MOSQUITO") return PieceType::MOSQUITO;
     throw std::invalid_argument("Invalid PieceType string: " + str);
 }
 
@@ -191,6 +195,8 @@ void to_json(nlohmann::json& j, const Game& game) {
     } else {
         j["winner"] = nullptr;
     }
+    
+    j["advanced_mode"] = game.advanced_mode;
 }
 
 void from_json(const nlohmann::json& j, Game& game) {
@@ -233,6 +239,13 @@ void from_json(const nlohmann::json& j, Game& game) {
     } else {
         game.winner = std::nullopt;
     }
+    
+    // Parse advanced_mode
+    if (j.contains("advanced_mode")) {
+        game.advanced_mode = j["advanced_mode"].get<bool>();
+    } else {
+        game.advanced_mode = false;
+    }
 }
 
 std::unordered_map<PieceType, int> create_initial_hand() {
@@ -242,6 +255,18 @@ std::unordered_map<PieceType, int> create_initial_hand() {
         {PieceType::GRASSHOPPER, 3},
         {PieceType::SPIDER, 2},
         {PieceType::BEETLE, 2}
+    };
+}
+
+std::unordered_map<PieceType, int> create_advanced_hand() {
+    return {
+        {PieceType::QUEEN, 1},
+        {PieceType::ANT, 3},
+        {PieceType::GRASSHOPPER, 3},
+        {PieceType::SPIDER, 2},
+        {PieceType::BEETLE, 2},
+        {PieceType::LADYBUG, 1},
+        {PieceType::MOSQUITO, 1}
     };
 }
 

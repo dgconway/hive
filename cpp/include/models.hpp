@@ -16,7 +16,9 @@ enum class PieceType {
     ANT,
     SPIDER,
     BEETLE,
-    GRASSHOPPER
+    GRASSHOPPER,
+    LADYBUG,
+    MOSQUITO
 };
 
 enum class PlayerColor {
@@ -91,9 +93,10 @@ struct Game {
     std::optional<PlayerColor> winner;
     GameStatus status;
     std::vector<MoveLog> history;
+    bool advanced_mode = false;
 
     Game() : current_turn(PlayerColor::WHITE), turn_number(1), 
-             status(GameStatus::IN_PROGRESS) {}
+             status(GameStatus::IN_PROGRESS), advanced_mode(false) {}
 };
 
 // JSON serialization functions
@@ -123,5 +126,6 @@ void from_json(const nlohmann::json& j, Game& game);
 
 // Helper to create initial hand
 std::unordered_map<PieceType, int> create_initial_hand();
+std::unordered_map<PieceType, int> create_advanced_hand();
 
 } // namespace bugs
