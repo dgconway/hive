@@ -1,3 +1,7 @@
 # Hive Frontend
 
-Run the frontend with 'npm run dev' in the frontend directory. 
+```bash
+cd frontend
+npm install 
+npm run dev
+```
