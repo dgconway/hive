@@ -43,6 +43,7 @@ private:
     // Execution
     void execute_place(Game& game, const MoveRequest& move);
     void execute_move(Game& game, const MoveRequest& move);
+    void execute_special(Game& game, const MoveRequest& move);
     
     // Movement validation
     bool validate_queen_move(const Hex& start, const Hex& end, 
@@ -58,6 +59,8 @@ private:
                               const std::unordered_set<Hex, HexHash>& occupied);
     bool validate_mosquito_move(const Game& game, const Hex& start, const Hex& end,
                                const std::unordered_set<Hex, HexHash>& occupied);
+    bool validate_pillbug_move(const Hex& start, const Hex& end,
+                              const std::unordered_set<Hex, HexHash>& occupied);
     
     // Move generation
     std::unordered_set<Hex, HexHash> gen_queen_moves(
@@ -74,6 +77,12 @@ private:
         const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> gen_mosquito_moves(
         const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
+    std::unordered_set<Hex, HexHash> gen_pillbug_moves(
+        const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
+    
+    // Pillbug special ability: returns pairs of (from_hex, to_hex) for throwable pieces
+    std::vector<std::pair<Hex, Hex>> gen_pillbug_special_moves(
+        const Game& game, const Hex& pillbug_hex, const std::unordered_set<Hex, HexHash>& occupied);
     
     // Helpers
     bool can_slide(const Hex& start, const Hex& end, 

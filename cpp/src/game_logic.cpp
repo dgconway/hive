@@ -92,6 +92,8 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     
     if (move.action == ActionType::PLACE) {
         execute_place(game, move);
+    } else if (move.action == ActionType::SPECIAL) {
+        execute_special(game, move);
     } else {
         execute_move(game, move);
     }
@@ -99,6 +101,17 @@ Game GameEngine::process_move(const std::string& game_id, const MoveRequest& mov
     game.history.push_back(log);
     
     check_win_condition(game);
+    
+    // Set tracking for next turn BEFORE switching
+    // last_moved_to: where the piece ended up (for pillbug can't-throw-last-moved rule)
+    if (move.action == ActionType::MOVE) {
+        game.last_moved_to = move.to_hex;
+    } else {
+        game.last_moved_to = std::nullopt;
+    }
+    
+    // pillbug_frozen_hex: set by execute_special, persists for opponent's turn
+    // (already set in execute_special if applicable)
     
     // Switch turn
     game.current_turn = (game.current_turn == PlayerColor::WHITE) 
@@ -133,6 +146,8 @@ void GameEngine::process_move_inplace(Game& game, const MoveRequest& move) {
     
     if (move.action == ActionType::PLACE) {
         execute_place(game, move);
+    } else if (move.action == ActionType::SPECIAL) {
+        execute_special(game, move);
     } else {
         execute_move(game, move);
     }
@@ -140,6 +155,13 @@ void GameEngine::process_move_inplace(Game& game, const MoveRequest& move) {
     game.history.push_back(log);
     
     check_win_condition(game);
+    
+    // Set tracking for next turn
+    if (move.action == ActionType::MOVE) {
+        game.last_moved_to = move.to_hex;
+    } else {
+        game.last_moved_to = std::nullopt;
+    }
     
     // Switch turn
     game.current_turn = (game.current_turn == PlayerColor::WHITE) 
@@ -297,6 +319,9 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         case PieceType::MOSQUITO:
             valid = validate_mosquito_move(game, move.from_hex.value(), move.to_hex, occupied);
             break;
+        case PieceType::PILLBUG:
+            valid = validate_pillbug_move(move.from_hex.value(), move.to_hex, occupied);
+            break;
     }
     
     if (!valid) {
@@ -313,6 +338,128 @@ void GameEngine::execute_move(Game& game, const MoveRequest& move) {
         game.board[move.to_hex] = {};
     }
     game.board[move.to_hex].push_back(piece_to_move);
+}
+
+// Execution - Special (Pillbug throw)
+void GameEngine::execute_special(Game& game, const MoveRequest& move) {
+    if (!move.from_hex.has_value()) {
+        throw std::runtime_error("Origin required for special move");
+    }
+    
+    Hex from = move.from_hex.value();
+    Hex to = move.to_hex;
+    
+    if (!game.board.count(from) || game.board.at(from).empty()) {
+        throw std::runtime_error("No piece at origin for special move");
+    }
+    
+    // The thrown piece must be unstacked
+    if (game.board.at(from).size() > 1) {
+        throw std::runtime_error("Cannot throw a stacked piece");
+    }
+    
+    // Cannot throw the piece that was just moved by opponent
+    if (game.last_moved_to.has_value() && game.last_moved_to.value() == from) {
+        throw std::runtime_error("Cannot throw the piece that was just moved");
+    }
+    
+    // Cannot throw a frozen piece
+    if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == from) {
+        throw std::runtime_error("That piece is frozen by pillbug");
+    }
+    
+    // Destination must be empty
+    if (game.board.count(to) && !game.board.at(to).empty()) {
+        throw std::runtime_error("Destination must be empty for special move");
+    }
+    
+    // Find an adjacent Pillbug (or Mosquito touching Pillbug) owned by current player
+    // that is adjacent to BOTH from and to
+    bool found_pillbug = false;
+    Hex pillbug_hex;
+    
+    auto from_neighbors = get_neighbors(from);
+    auto to_neighbors = get_neighbors(to);
+    
+    for (const auto& n : from_neighbors) {
+        if (!game.board.count(n) || game.board.at(n).empty()) continue;
+        const Piece& top = game.board.at(n).back();
+        if (top.color != game.current_turn) continue;
+        
+        // Check if this piece is adjacent to destination too
+        bool adj_to_dest = false;
+        for (const auto& tn : to_neighbors) {
+            if (tn == n) { adj_to_dest = true; break; }
+        }
+        if (!adj_to_dest) continue;
+        
+        // Must be a Pillbug (not stacked under something)
+        bool is_pillbug = (top.type == PieceType::PILLBUG && game.board.at(n).size() == 1);
+        
+        // Or a Mosquito touching a Pillbug (at ground level)
+        bool is_mosquito_as_pillbug = false;
+        if (top.type == PieceType::MOSQUITO && game.board.at(n).size() == 1) {
+            for (const auto& mn : get_neighbors(n)) {
+                if (game.board.count(mn) && !game.board.at(mn).empty()) {
+                    if (game.board.at(mn).back().type == PieceType::PILLBUG) {
+                        is_mosquito_as_pillbug = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if (is_pillbug || is_mosquito_as_pillbug) {
+            // Pillbug under another piece can't use ability
+            // (already checked via size == 1 above)
+            
+            // Check if pillbug itself is not frozen
+            if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == n) {
+                continue; // This pillbug is frozen
+            }
+            
+            pillbug_hex = n;
+            found_pillbug = true;
+            break;
+        }
+    }
+    
+    if (!found_pillbug) {
+        throw std::runtime_error("No valid pillbug adjacent to both source and destination");
+    }
+    
+    // One Hive Rule: removing the piece must not disconnect hive
+    auto occupied = get_occupied_hexes(game.board);
+    auto future_occupied = occupied;
+    future_occupied.erase(from);
+    if (!is_connected(future_occupied)) {
+        throw std::runtime_error("Special move violates One Hive Rule");
+    }
+    
+    // Freedom of movement: check slide from piece -> pillbug
+    if (!can_slide(from, pillbug_hex, occupied)) {
+        throw std::runtime_error("Cannot slide piece onto pillbug (gate blocked)");
+    }
+    
+    // Freedom of movement: check slide from pillbug -> destination
+    // For this check, the piece is "on top" of pillbug, so from_hex is now empty
+    auto occupied_after_lift = occupied;
+    occupied_after_lift.erase(from);
+    if (!can_slide(pillbug_hex, to, occupied_after_lift)) {
+        throw std::runtime_error("Cannot slide piece off pillbug (gate blocked)");
+    }
+    
+    // Execute the throw
+    Piece thrown_piece = game.board[from].back();
+    game.board[from].pop_back();
+    if (game.board[from].empty()) {
+        game.board.erase(from);
+    }
+    
+    game.board[to] = {thrown_piece};
+    
+    // Mark the thrown piece as frozen for opponent's next turn
+    game.pillbug_frozen_hex = to;
 }
 
 // Helper: can_slide
@@ -639,6 +786,12 @@ bool GameEngine::validate_mosquito_move(const Game& game, const Hex& start, cons
     return candidates.count(end) > 0;
 }
 
+// Pillbug validation (queen-like, 1 space)
+bool GameEngine::validate_pillbug_move(const Hex& start, const Hex& end,
+                                       const std::unordered_set<Hex, HexHash>& occupied) {
+    return validate_queen_move(start, end, occupied);
+}
+
 // Ladybug move generation
 // Moves exactly 3 steps: first 2 on top of hive, last 1 down to empty ground
 std::unordered_set<Hex, HexHash> GameEngine::gen_ladybug_moves(
@@ -739,6 +892,9 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_mosquito_moves(
             case PieceType::LADYBUG:
                 moves = gen_ladybug_moves(game, start, occupied);
                 break;
+            case PieceType::PILLBUG:
+                moves = gen_pillbug_moves(start, occupied);
+                break;
             default:
                 break;
         }
@@ -746,6 +902,78 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_mosquito_moves(
     }
     
     return all_moves;
+}
+
+// Pillbug move generation (same as queen: 1 space, ground level)
+std::unordered_set<Hex, HexHash> GameEngine::gen_pillbug_moves(
+    const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
+    return gen_queen_moves(start, occupied);
+}
+
+// Pillbug special move generation
+// Returns pairs of (from_hex, to_hex) for each valid throw
+std::vector<std::pair<Hex, Hex>> GameEngine::gen_pillbug_special_moves(
+    const Game& game, const Hex& pillbug_hex, const std::unordered_set<Hex, HexHash>& occupied) {
+    std::vector<std::pair<Hex, Hex>> special_moves;
+    
+    // Pillbug under another piece can't use ability
+    if (game.board.count(pillbug_hex) && game.board.at(pillbug_hex).size() > 1) {
+        return special_moves;
+    }
+    
+    // If the pillbug itself is frozen, it can't use ability
+    if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == pillbug_hex) {
+        return special_moves;
+    }
+    
+    // Get empty neighbors of pillbug (potential destinations)
+    std::vector<Hex> empty_neighbors;
+    for (const auto& n : get_neighbors(pillbug_hex)) {
+        if (!occupied.count(n)) {
+            empty_neighbors.push_back(n);
+        }
+    }
+    if (empty_neighbors.empty()) return special_moves;
+    
+    // For each adjacent piece to the pillbug:
+    for (const auto& adj : get_neighbors(pillbug_hex)) {
+        if (!game.board.count(adj) || game.board.at(adj).empty()) continue;
+        
+        // Must be unstacked
+        if (game.board.at(adj).size() > 1) continue;
+        
+        // Cannot throw the piece opponent just moved
+        if (game.last_moved_to.has_value() && game.last_moved_to.value() == adj) {
+            continue;
+        }
+        
+        // Cannot throw a frozen piece
+        if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == adj) {
+            continue;
+        }
+        
+        // One Hive: removing this piece must not disconnect
+        auto future_occupied = occupied;
+        future_occupied.erase(adj);
+        if (!is_connected(future_occupied)) continue;
+        
+        // Freedom of movement: piece -> pillbug (slide check)
+        if (!can_slide(adj, pillbug_hex, occupied)) continue;
+        
+        // For each empty destination adjacent to pillbug:
+        for (const auto& dest : empty_neighbors) {
+            if (dest == adj) continue; // Can't land back where it was
+            
+            // Freedom of movement: pillbug -> destination (after piece is lifted)
+            auto occupied_after_lift = occupied;
+            occupied_after_lift.erase(adj);
+            if (!can_slide(pillbug_hex, dest, occupied_after_lift)) continue;
+            
+            special_moves.emplace_back(adj, dest);
+        }
+    }
+    
+    return special_moves;
 }
 
 // Get valid moves
@@ -789,6 +1017,11 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
         return {}; // Pinned
     }
     
+    // Pillbug frozen check: if this piece was thrown by opponent's pillbug, it can't move
+    if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == from_hex) {
+        return {};
+    }
+    
     // Generate candidates
     std::unordered_set<Hex, HexHash> candidates;
     
@@ -813,6 +1046,9 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
             break;
         case PieceType::MOSQUITO:
             candidates = gen_mosquito_moves(game, from_hex, occupied_after_lift);
+            break;
+        case PieceType::PILLBUG:
+            candidates = gen_pillbug_moves(from_hex, occupied_after_lift);
             break;
     }
     

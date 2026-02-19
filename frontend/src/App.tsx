@@ -53,7 +53,8 @@ const PieceIcon = ({ type, color }: { type: PieceType; color: PlayerColor }) => 
         [PieceType.BEETLE]: "🪲",
         [PieceType.GRASSHOPPER]: "🦗",
         [PieceType.LADYBUG]: "🐞",
-        [PieceType.MOSQUITO]: "🦟"
+        [PieceType.MOSQUITO]: "🦟",
+        [PieceType.PILLBUG]: "🪳"
     };
 
     return (

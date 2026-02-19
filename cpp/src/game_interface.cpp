@@ -112,6 +112,43 @@ std::vector<Action> GameInterface::get_legal_actions(const GameState& state) {
                     actions.emplace_back(action);
                 }
             }
+            
+            // Generate SPECIAL actions (Pillbug throws)
+            auto occupied = engine_.get_occupied_hexes(game.board);
+            for (const auto& [pos, stack] : game.board) {
+                if (stack.empty()) continue;
+                const Piece& top = stack.back();
+                if (top.color != game.current_turn) continue;
+                
+                bool can_use_special = false;
+                
+                if (top.type == PieceType::PILLBUG && stack.size() == 1) {
+                    can_use_special = true;
+                } else if (top.type == PieceType::MOSQUITO && stack.size() == 1) {
+                    // Check if mosquito is adjacent to a pillbug
+                    for (const auto& n : get_neighbors(pos)) {
+                        if (game.board.count(n) && !game.board.at(n).empty()) {
+                            if (game.board.at(n).back().type == PieceType::PILLBUG) {
+                                can_use_special = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (can_use_special) {
+                    auto specials = engine_.gen_pillbug_special_moves(game, pos, occupied);
+                    for (const auto& [from, to] : specials) {
+                        Action action(ActionType::SPECIAL, to);
+                        action.from_hex = from;
+                        // piece_type is the piece being thrown
+                        if (game.board.count(from) && !game.board.at(from).empty()) {
+                            action.piece_type = game.board.at(from).back().type;
+                        }
+                        actions.emplace_back(action);
+                    }
+                }
+            }
         }
     }
     

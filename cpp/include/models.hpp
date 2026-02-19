@@ -18,7 +18,8 @@ enum class PieceType {
     BEETLE,
     GRASSHOPPER,
     LADYBUG,
-    MOSQUITO
+    MOSQUITO,
+    PILLBUG
 };
 
 enum class PlayerColor {
@@ -33,7 +34,8 @@ enum class GameStatus {
 
 enum class ActionType {
     PLACE,
-    MOVE
+    MOVE,
+    SPECIAL  // Pillbug throw ability
 };
 
 // String conversion functions
@@ -94,6 +96,10 @@ struct Game {
     GameStatus status;
     std::vector<MoveLog> history;
     bool advanced_mode = false;
+
+    // Pillbug tracking (transient, reset each turn)
+    std::optional<Hex> last_moved_to;        // Destination of opponent's last move
+    std::optional<Hex> pillbug_frozen_hex;    // Piece thrown by pillbug can't move next turn
 
     Game() : current_turn(PlayerColor::WHITE), turn_number(1), 
              status(GameStatus::IN_PROGRESS), advanced_mode(false) {}

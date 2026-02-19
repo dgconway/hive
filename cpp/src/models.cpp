@@ -14,6 +14,7 @@ std::string to_string(PieceType type) {
         case PieceType::GRASSHOPPER: return "GRASSHOPPER";
         case PieceType::LADYBUG: return "LADYBUG";
         case PieceType::MOSQUITO: return "MOSQUITO";
+        case PieceType::PILLBUG: return "PILLBUG";
     }
     throw std::invalid_argument("Invalid PieceType");
 }
@@ -27,7 +28,12 @@ std::string to_string(GameStatus status) {
 }
 
 std::string to_string(ActionType action) {
-    return action == ActionType::PLACE ? "PLACE" : "MOVE";
+    switch (action) {
+        case ActionType::PLACE: return "PLACE";
+        case ActionType::MOVE: return "MOVE";
+        case ActionType::SPECIAL: return "SPECIAL";
+    }
+    throw std::invalid_argument("Invalid ActionType");
 }
 
 PieceType piece_type_from_string(const std::string& str) {
@@ -38,6 +44,7 @@ PieceType piece_type_from_string(const std::string& str) {
     if (str == "GRASSHOPPER") return PieceType::GRASSHOPPER;
     if (str == "LADYBUG") return PieceType::LADYBUG;
     if (str == "MOSQUITO") return PieceType::MOSQUITO;
+    if (str == "PILLBUG") return PieceType::PILLBUG;
     throw std::invalid_argument("Invalid PieceType string: " + str);
 }
 
@@ -56,6 +63,7 @@ GameStatus game_status_from_string(const std::string& str) {
 ActionType action_type_from_string(const std::string& str) {
     if (str == "PLACE") return ActionType::PLACE;
     if (str == "MOVE") return ActionType::MOVE;
+    if (str == "SPECIAL") return ActionType::SPECIAL;
     throw std::invalid_argument("Invalid ActionType string: " + str);
 }
 
@@ -266,7 +274,8 @@ std::unordered_map<PieceType, int> create_advanced_hand() {
         {PieceType::SPIDER, 2},
         {PieceType::BEETLE, 2},
         {PieceType::LADYBUG, 1},
-        {PieceType::MOSQUITO, 1}
+        {PieceType::MOSQUITO, 1},
+        {PieceType::PILLBUG, 1}
     };
 }
 

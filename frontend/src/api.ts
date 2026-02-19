@@ -11,7 +11,8 @@ export enum PieceType {
     BEETLE = "BEETLE",
     GRASSHOPPER = "GRASSHOPPER",
     LADYBUG = "LADYBUG",
-    MOSQUITO = "MOSQUITO"
+    MOSQUITO = "MOSQUITO",
+    PILLBUG = "PILLBUG"
 }
 
 export enum PlayerColor {
