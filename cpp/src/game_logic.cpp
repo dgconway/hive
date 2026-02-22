@@ -374,9 +374,17 @@ void GameEngine::execute_special(Game& game, const MoveRequest& move) {
     }
     
     // Find an adjacent Pillbug (or Mosquito touching Pillbug) owned by current player
-    // that is adjacent to BOTH from and to
+    // that is adjacent to BOTH from and to, AND has clear gates.
     bool found_pillbug = false;
     Hex pillbug_hex;
+    
+    // One Hive Rule: checking this once is enough as it only depends on removing 'from'
+    auto occupied = get_occupied_hexes(game.board);
+    auto future_occupied = occupied;
+    future_occupied.erase(from);
+    if (!is_connected(future_occupied)) {
+        throw std::runtime_error("Special move violates One Hive Rule");
+    }
     
     auto from_neighbors = get_neighbors(from);
     auto to_neighbors = get_neighbors(to);
@@ -411,42 +419,33 @@ void GameEngine::execute_special(Game& game, const MoveRequest& move) {
         
         if (is_pillbug || is_mosquito_as_pillbug) {
             // Pillbug under another piece can't use ability
-            // (already checked via size == 1 above)
+            // (check effectively done by size == 1)
             
             // Check if pillbug itself is not frozen
             if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == n) {
                 continue; // This pillbug is frozen
             }
             
+            // Freedom of movement: check climb/slide from piece -> pillbug
+            if (!can_climb(from, n, occupied)) {
+                continue; // Gate blocked
+            }
+            
+            // Freedom of movement: check climb/slide from pillbug -> destination
+            auto occupied_after_lift = occupied;
+            occupied_after_lift.erase(from);
+            if (!can_climb(n, to, occupied_after_lift)) {
+                continue; // Gate blocked
+            }
+            
             pillbug_hex = n;
             found_pillbug = true;
-            break;
+            break; // Found a valid pillbug path!
         }
     }
     
     if (!found_pillbug) {
-        throw std::runtime_error("No valid pillbug adjacent to both source and destination");
-    }
-    
-    // One Hive Rule: removing the piece must not disconnect hive
-    auto occupied = get_occupied_hexes(game.board);
-    auto future_occupied = occupied;
-    future_occupied.erase(from);
-    if (!is_connected(future_occupied)) {
-        throw std::runtime_error("Special move violates One Hive Rule");
-    }
-    
-    // Freedom of movement: check slide from piece -> pillbug
-    if (!can_slide(from, pillbug_hex, occupied)) {
-        throw std::runtime_error("Cannot slide piece onto pillbug (gate blocked)");
-    }
-    
-    // Freedom of movement: check slide from pillbug -> destination
-    // For this check, the piece is "on top" of pillbug, so from_hex is now empty
-    auto occupied_after_lift = occupied;
-    occupied_after_lift.erase(from);
-    if (!can_slide(pillbug_hex, to, occupied_after_lift)) {
-        throw std::runtime_error("Cannot slide piece off pillbug (gate blocked)");
+        throw std::runtime_error("No valid pillbug path (gate blocked or no pillbug)");
     }
     
     // Execute the throw
@@ -775,7 +774,7 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_ant_moves(
 // Ladybug validation
 bool GameEngine::validate_ladybug_move(const Game& game, const Hex& start, const Hex& end,
                                        const std::unordered_set<Hex, HexHash>& occupied) {
-    auto candidates = gen_ladybug_moves(game, start, occupied);
+    auto candidates = gen_ladybug_moves(start, occupied);
     return candidates.count(end) > 0;
 }
 
@@ -795,7 +794,7 @@ bool GameEngine::validate_pillbug_move(const Hex& start, const Hex& end,
 // Ladybug move generation
 // Moves exactly 3 steps: first 2 on top of hive, last 1 down to empty ground
 std::unordered_set<Hex, HexHash> GameEngine::gen_ladybug_moves(
-    const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
+    const Hex& start, const std::unordered_set<Hex, HexHash>& occupied) {
     std::unordered_set<Hex, HexHash> valid_ends;
     
     // Step 1: move on top of an adjacent occupied hex
@@ -890,7 +889,7 @@ std::unordered_set<Hex, HexHash> GameEngine::gen_mosquito_moves(
                 moves = gen_ant_moves(start, occupied);
                 break;
             case PieceType::LADYBUG:
-                moves = gen_ladybug_moves(game, start, occupied);
+                moves = gen_ladybug_moves(start, occupied);
                 break;
             case PieceType::PILLBUG:
                 moves = gen_pillbug_moves(start, occupied);
@@ -958,7 +957,7 @@ std::vector<std::pair<Hex, Hex>> GameEngine::gen_pillbug_special_moves(
         if (!is_connected(future_occupied)) continue;
         
         // Freedom of movement: piece -> pillbug (slide check)
-        if (!can_slide(adj, pillbug_hex, occupied)) continue;
+        if (!can_climb(adj, pillbug_hex, occupied)) continue;
         
         // For each empty destination adjacent to pillbug:
         for (const auto& dest : empty_neighbors) {
@@ -967,7 +966,7 @@ std::vector<std::pair<Hex, Hex>> GameEngine::gen_pillbug_special_moves(
             // Freedom of movement: pillbug -> destination (after piece is lifted)
             auto occupied_after_lift = occupied;
             occupied_after_lift.erase(adj);
-            if (!can_slide(pillbug_hex, dest, occupied_after_lift)) continue;
+            if (!can_climb(pillbug_hex, dest, occupied_after_lift)) continue;
             
             special_moves.emplace_back(adj, dest);
         }
@@ -984,11 +983,17 @@ std::vector<Hex> GameEngine::get_valid_moves(const std::string& game_id, int q, 
     }
     
     auto occupied = get_occupied_hexes(game_opt->board);
-    return get_valid_moves_for_piece(game_opt.value(), {q, r}, occupied);
+    return get_valid_moves_for_piece(game_opt.value(), {q, r}, occupied, true);
 }
 
+// Special move generation integration
+// We need to return:
+// 1. If 'piece' is Pillbug: valid moves + adjacent pieces it can throw (as "moves" to occupied hexes)
+// 2. If 'piece' is adjacent to Pillbug: valid moves + destinations it can be thrown to
 std::vector<Hex> GameEngine::get_valid_moves_for_piece(
-    const Game& game, const Hex& from_hex, const std::unordered_set<Hex, HexHash>& occupied) {
+    const Game& game, const Hex& from_hex, 
+    const std::unordered_set<Hex, HexHash>& occupied,
+    bool include_interaction_targets) {
     
     if (!game.board.count(from_hex) || game.board.at(from_hex).empty()) {
         return {};
@@ -1006,53 +1011,139 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
         return {};
     }
     
-    // One Hive check
+    // One Hive check for normal movement (moving FROM from_hex)
     size_t stack_height = game.board.at(from_hex).size();
     auto occupied_after_lift = occupied;
     if (stack_height == 1) {
         occupied_after_lift.erase(from_hex);
     }
     
-    if (!is_connected(occupied_after_lift)) {
-        return {}; // Pinned
-    }
+    bool pinned = !is_connected(occupied_after_lift);
     
     // Pillbug frozen check: if this piece was thrown by opponent's pillbug, it can't move
-    if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == from_hex) {
-        return {};
-    }
+    bool frozen = (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == from_hex);
     
-    // Generate candidates
     std::unordered_set<Hex, HexHash> candidates;
     
-    switch (piece.type) {
-        case PieceType::QUEEN:
-            candidates = gen_queen_moves(from_hex, occupied_after_lift);
-            break;
-        case PieceType::BEETLE:
-            candidates = gen_beetle_moves(game, from_hex, occupied_after_lift);
-            break;
-        case PieceType::GRASSHOPPER:
-            candidates = gen_grasshopper_moves(from_hex, occupied);
-            break;
-        case PieceType::SPIDER:
-            candidates = gen_spider_moves(from_hex, occupied_after_lift);
-            break;
-        case PieceType::ANT:
-            candidates = gen_ant_moves(from_hex, occupied_after_lift);
-            break;
-        case PieceType::LADYBUG:
-            candidates = gen_ladybug_moves(game, from_hex, occupied_after_lift);
-            break;
-        case PieceType::MOSQUITO:
-            candidates = gen_mosquito_moves(game, from_hex, occupied_after_lift);
-            break;
-        case PieceType::PILLBUG:
-            candidates = gen_pillbug_moves(from_hex, occupied_after_lift);
-            break;
+    // 1. Normal Moves (if not pinned and not frozen)
+    if (!pinned && !frozen) {
+        switch (piece.type) {
+            case PieceType::QUEEN:
+                candidates = gen_queen_moves(from_hex, occupied_after_lift);
+                break;
+            case PieceType::BEETLE:
+                candidates = gen_beetle_moves(game, from_hex, occupied_after_lift);
+                break;
+            case PieceType::GRASSHOPPER:
+                candidates = gen_grasshopper_moves(from_hex, occupied);
+                break;
+            case PieceType::SPIDER:
+                candidates = gen_spider_moves(from_hex, occupied_after_lift);
+                break;
+            case PieceType::ANT:
+                candidates = gen_ant_moves(from_hex, occupied_after_lift);
+                break;
+            case PieceType::LADYBUG:
+                candidates = gen_ladybug_moves(from_hex, occupied_after_lift);
+                break;
+            case PieceType::MOSQUITO:
+                candidates = gen_mosquito_moves(game, from_hex, occupied_after_lift);
+                break;
+            case PieceType::PILLBUG:
+                candidates = gen_pillbug_moves(from_hex, occupied_after_lift);
+                break;
+        }
     }
     
+    // 2. Special Moves (Pillbug Logic)
+    
+    // 2. Special Moves (Pillbug Logic) - UI ONLY
+    if (include_interaction_targets) {
+        // Case A: Selected piece IS a Pillbug (or Mosquito acting as one)
+        // Goal: Highlight adjacent pieces that CAN be thrown.
+        // We represent these as "valid moves" to occupied squares.
+        bool can_act_as_pillbug = false;
+    if (piece.type == PieceType::PILLBUG && stack_height == 1) {
+        can_act_as_pillbug = true;
+    } else if (piece.type == PieceType::MOSQUITO && stack_height == 1) {
+         for (const auto& n : get_neighbors(from_hex)) {
+            if (game.board.count(n) && !game.board.at(n).empty()) {
+                if (game.board.at(n).back().type == PieceType::PILLBUG) {
+                    can_act_as_pillbug = true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (can_act_as_pillbug && !frozen) {
+         auto special_moves = gen_pillbug_special_moves(game, from_hex, occupied);
+         for (const auto& move : special_moves) {
+             // move.first is the piece being thrown (adjacent to pillbug)
+             // move.second is the destination
+             // We return the SOURCE (move.first) so the frontend knows it can be grabbed.
+             candidates.insert(move.first); 
+         }
+    }
+    
+    // Case B: Selected piece is adjacent to a friendly Pillbug (it might be thrown)
+    // Goal: Highlight destinations.
+    // We need to check if ANY adjacent friendly pillbug can throw THIS piece.
+    // This piece is 'from_hex'.
+    if (stack_height == 1 && !frozen) {
+        for (const auto& n : get_neighbors(from_hex)) {
+            if (!game.board.count(n) || game.board.at(n).empty()) continue;
+            const Piece& neighbor = game.board.at(n).back();
+            
+            if (neighbor.color == game.current_turn) {
+                bool neighbor_is_pillbug = (neighbor.type == PieceType::PILLBUG);
+                bool neighbor_is_mosquito_pillbug = false;
+                
+                if (neighbor.type == PieceType::MOSQUITO) {
+                     // Check if mosquito touches ANOTHER pillbug (neighbors of n)
+                     for (const auto& mn : get_neighbors(n)) {
+                        if (game.board.count(mn) && !game.board.at(mn).empty()) {
+                            if (game.board.at(mn).back().type == PieceType::PILLBUG) {
+                                neighbor_is_mosquito_pillbug = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if ((neighbor_is_pillbug || neighbor_is_mosquito_pillbug) && game.board.at(n).size() == 1) {
+                     // Check if 'neighbor' is frozen
+                     if (game.pillbug_frozen_hex.has_value() && game.pillbug_frozen_hex.value() == n) continue;
+                     
+                     // Check if 'neighbor' can throw 'from_hex'
+                     // We can use gen_pillbug_special_moves for the neighbor
+                     auto specials = gen_pillbug_special_moves(game, n, occupied);
+                     for (const auto& move : specials) {
+                         if (move.first == from_hex) {
+                             candidates.insert(move.second); // Add destination
+                         }
+                     }
+                }
+            }
+        }
+    }
+    }
+
     return std::vector<Hex>(candidates.begin(), candidates.end());
+}
+
+// Helper: check if climb is possible (gate not blocked)
+bool GameEngine::can_climb(const Hex& start, const Hex& end, 
+                          const std::unordered_set<Hex, HexHash>& occupied) {
+    auto common = get_common_neighbors(start, end);
+    int occupied_common = 0;
+    for (const auto& n : common) {
+        if (occupied.count(n)) {
+            occupied_common++;
+        }
+    }
+    // Gate is blocked if both common neighbors are occupied
+    return occupied_common < 2;
 }
 
 // Win condition

@@ -283,6 +283,28 @@ function App() {
             const isMoveTarget = validMoves.some(([vq, vr]) => vq === q && vr === r);
 
             if (isMoveTarget) {
+                // Check if target is occupied (Pillbug throw source selection)
+                const key = `${q},${r}`;
+                if (game.board[key] && game.board[key].length > 0) {
+                    // Select this piece (throwable target)
+                    setSelectedHex({ q, r });
+
+                    // Fetch valid moves for this piece
+                    try {
+                        const moves = await getValidMoves(game.game_id, q, r);
+                        setValidMoves(moves);
+                        if (moves.length === 0) {
+                            setError("No valid moves for this piece!");
+                        } else {
+                            setError(null);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        setValidMoves([]);
+                    }
+                    return;
+                }
+
                 // EXECUTE MOVE
                 try {
                     const updated = await makeMove(game.game_id, "MOVE", [q, r], undefined, [selectedHex.q, selectedHex.r]);
@@ -364,7 +386,7 @@ function App() {
                     <polygon
                         points={getHexPoints(HEX_SIZE)}
                         className={`hex ${topPiece.color === PlayerColor.WHITE ? 'hex-white' : 'hex-black'} ${isSelected ? 'hex-selected' : ''}`}
-                        style={isValidMove ? { stroke: '#00ff00', strokeWidth: 3 } : {}}
+                        style={isValidMove ? { stroke: (stack.length > 0 ? '#0000ff' : '#00ff00'), strokeWidth: 3 } : {}}
                     />
                     <foreignObject x={-12} y={-12} width={24} height={24}>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>

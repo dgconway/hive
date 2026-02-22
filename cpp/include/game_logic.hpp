@@ -31,7 +31,8 @@ public:
     std::vector<Hex> get_valid_moves_for_piece(
         const Game& game, 
         const Hex& from_hex, 
-        const std::unordered_set<Hex, HexHash>& occupied
+        const std::unordered_set<Hex, HexHash>& occupied,
+        bool include_interaction_targets = false
     );
 
 private:
@@ -74,7 +75,7 @@ private:
     std::unordered_set<Hex, HexHash> gen_ant_moves(
         const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> gen_ladybug_moves(
-        const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
+        const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> gen_mosquito_moves(
         const Game& game, const Hex& start, const std::unordered_set<Hex, HexHash>& occupied);
     std::unordered_set<Hex, HexHash> gen_pillbug_moves(
@@ -87,6 +88,11 @@ private:
     // Helpers
     bool can_slide(const Hex& start, const Hex& end, 
                   const std::unordered_set<Hex, HexHash>& occupied);
+                  
+    // Helper to check if a piece can climb up to/down from a hex (just checks gate)
+    bool can_climb(const Hex& start, const Hex& end, 
+                   const std::unordered_set<Hex, HexHash>& occupied);
+
     std::unordered_set<Hex, HexHash> get_occupied_hexes(
         const std::unordered_map<Hex, std::vector<Piece>, HexHash>& board);
     void check_win_condition(Game& game);
