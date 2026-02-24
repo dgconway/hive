@@ -50,7 +50,7 @@ export const getGame = async (gameId: string): Promise<Game> => {
 
 export const makeMove = async (
     gameId: string,
-    action: "PLACE" | "MOVE",
+    action: "PLACE" | "MOVE" | "SPECIAL",
     toHex: [number, number],
     pieceType?: PieceType,
     fromHex?: [number, number]
@@ -60,7 +60,7 @@ export const makeMove = async (
         to_hex: toHex
     };
     if (action === "PLACE") payload.piece_type = pieceType;
-    if (action === "MOVE") payload.from_hex = fromHex;
+    if (action === "MOVE" || action === "SPECIAL") payload.from_hex = fromHex;
 
     const response = await api.post<Game>(`/games/${gameId}/move`, payload);
     return response.data;

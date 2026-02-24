@@ -87,6 +87,7 @@ function App() {
     const [hoverHex, setHoverHex] = useState<{ q: number, r: number } | null>(null);
     const [validMoves, setValidMoves] = useState<Array<[number, number]>>([]);
     const [validPlacements, setValidPlacements] = useState<Array<[number, number]>>([]);
+    const [isPillbugThrow, setIsPillbugThrow] = useState(false);
 
     // AI State
     const [aiEnabled, setAiEnabled] = useState(true);
@@ -137,6 +138,7 @@ function App() {
             setGame(g);
             setValidMoves([]);
             setValidPlacements([]);
+            setIsPillbugThrow(false);
             setError(null);
         } catch (e) {
             console.error(e);
@@ -219,6 +221,7 @@ function App() {
         setSelectedPieceType(pieceType);
         setSelectedHex(null);
         setValidMoves([]);
+        setIsPillbugThrow(false);
 
         // Calculate and show valid placements
         const placements = getValidPlacements(game);
@@ -238,6 +241,7 @@ function App() {
                     // Switch to selecting this piece for movement
                     setSelectedPieceType(null);
                     setSelectedHex({ q, r });
+                    setIsPillbugThrow(false);
                     // Fetch valid moves for this piece
                     try {
                         const moves = await getValidMoves(game.game_id, q, r);
@@ -276,6 +280,7 @@ function App() {
             if (selectedHex.q === q && selectedHex.r === r) {
                 setSelectedHex(null);
                 setValidMoves([]);
+                setIsPillbugThrow(false);
                 return;
             }
 
@@ -288,6 +293,7 @@ function App() {
                 if (game.board[key] && game.board[key].length > 0) {
                     // Select this piece (throwable target)
                     setSelectedHex({ q, r });
+                    setIsPillbugThrow(true);
 
                     // Fetch valid moves for this piece
                     try {
@@ -307,10 +313,12 @@ function App() {
 
                 // EXECUTE MOVE
                 try {
-                    const updated = await makeMove(game.game_id, "MOVE", [q, r], undefined, [selectedHex.q, selectedHex.r]);
+                    const action = isPillbugThrow ? "SPECIAL" : "MOVE";
+                    const updated = await makeMove(game.game_id, action, [q, r], undefined, [selectedHex.q, selectedHex.r]);
                     setGame(updated);
                     setSelectedHex(null);
                     setValidMoves([]);
+                    setIsPillbugThrow(false);
                     setError(null);
                 } catch (err: any) {
                     setError(err.response?.data?.detail || "Invalid Move");
@@ -339,6 +347,7 @@ function App() {
                 }
 
                 setSelectedHex({ q, r });
+                setIsPillbugThrow(false);
 
                 // Fetch Valid Moves
                 try {

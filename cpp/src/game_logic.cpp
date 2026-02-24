@@ -1000,15 +1000,15 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
     }
     
     const Piece& piece = game.board.at(from_hex).back();
-    if (piece.color != game.current_turn) {
-        return {};
-    }
+    bool is_own_piece = (piece.color == game.current_turn);
     
-    // Queen must be played before moving
-    auto& hand = (game.current_turn == PlayerColor::WHITE) 
-        ? game.white_pieces_hand : game.black_pieces_hand;
-    if (hand.at(PieceType::QUEEN) == 1 && piece.type != PieceType::QUEEN) {
-        return {};
+    // Queen must be played before moving (only applies to own pieces)
+    if (is_own_piece) {
+        auto& hand = (game.current_turn == PlayerColor::WHITE) 
+            ? game.white_pieces_hand : game.black_pieces_hand;
+        if (hand.at(PieceType::QUEEN) == 1 && piece.type != PieceType::QUEEN) {
+            return {};
+        }
     }
     
     // One Hive check for normal movement (moving FROM from_hex)
@@ -1025,8 +1025,8 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
     
     std::unordered_set<Hex, HexHash> candidates;
     
-    // 1. Normal Moves (if not pinned and not frozen)
-    if (!pinned && !frozen) {
+    // 1. Normal Moves (if not pinned and not frozen and IS OWN PIECE)
+    if (is_own_piece && !pinned && !frozen) {
         switch (piece.type) {
             case PieceType::QUEEN:
                 candidates = gen_queen_moves(from_hex, occupied_after_lift);
@@ -1076,7 +1076,7 @@ std::vector<Hex> GameEngine::get_valid_moves_for_piece(
         }
     }
     
-    if (can_act_as_pillbug && !frozen) {
+    if (is_own_piece && can_act_as_pillbug && !frozen) {
          auto special_moves = gen_pillbug_special_moves(game, from_hex, occupied);
          for (const auto& move : special_moves) {
              // move.first is the piece being thrown (adjacent to pillbug)
