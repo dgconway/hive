@@ -622,6 +622,54 @@ void test_grasshopper() {
 }
 
 
+void test_pillbug() {
+    GameEngine engine;
+    Game game = engine.create_game();
+    MoveRequest m;
+
+    m = MoveRequest(ActionType::PLACE, { 0,0 }, PieceType::GRASSHOPPER);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -1,0 }, PieceType::GRASSHOPPER);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 0,1 }, PieceType::QUEEN);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -1,1 }, PieceType::QUEEN);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { 1,-1 }, PieceType::PILLBUG);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::PLACE, { -2,1 }, PieceType::PILLBUG);
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::MOVE, { 1,1 }, { 0,-1 });
+    game = engine.process_move(game.game_id, m);
+
+    m = MoveRequest(ActionType::MOVE, { -2,1 }, { -1, 1 });
+    game = engine.process_move(game.game_id, m);
+
+    // gen_pillbug_special_moves should allow white to move the black queen on (-1, -1) to (1, -1), (1, -2), or (0, -2)
+    auto moves = engine.gen_pillbug_special_moves(game, { -1, -1 }, game.board);
+    assert(moves.size() == 3);
+
+    // and same for the grasshopper on (-1, 0)
+
+    // the pillbug itself should be able to move from its square on {0,-1} to {0, -2} or {1, -1}
+
+    // use the pillbug on {0,-1} to move the black queen from {-1,-1} to {1,-1}. 
+
+    // assert that the black queen cannot move now. 
+
+    // use the pillbug on {-1,1} to move the white queen from {0,1} to {-2,1}
+
+    // assert that the white queen cannot move now. 
+
+    // might need more tests for more specific behavior. 
+}
+
 
 int main() {
     std::cout << "Starting game 1..." << std::endl;
